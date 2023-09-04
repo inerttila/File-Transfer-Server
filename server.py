@@ -262,12 +262,12 @@ if __name__ == "__main__":
     if sys.argv[-1]:
         if sys.argv[-1] == "80":  # NAME
             # python server.py {the name above}
-            app.run(host='0.0.0.0', port=80)
+            app.run(host='your_ip_address_here', port=80)
         if sys.argv[-1] == "help":
             print("\nExamples:\n\tDev: python server.py\n\tDeploy: python server.py deploy\n\tDeploy custom port: python server.py <9598>\n\n")
         else:
             try:
-                app.run(host="192.168.40.14", port=sys.argv[-1])
+                app.run(host="your_ip_address_here", port=sys.argv[-1])
             except:
                 print("Cannot open port", sys.argv[-1])
                 print("Running on localhost:5000")
