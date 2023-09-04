@@ -33,7 +33,7 @@ Before you begin, ensure you have met the following requirements:
 git clone https://github.com/inerttila/UPLOAD_Fhoto.git
 ```
 
-## Install dependencies:
+### Install dependencies:
 
 ```shell
 pip install -r requirements.txt
