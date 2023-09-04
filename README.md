@@ -10,6 +10,7 @@ UPLOAD_Fhoto is a simple Flask-based web application for uploading files.
 4. [Usage](#usage)
 5. [Features](#features)
 6. [Contributing](#contributing)
+7. [Contact](#Contact)
 
 ## Introduction
 
@@ -64,3 +65,10 @@ Open a pull request.
 Please follow our coding standards and conventions.
 
 You can copy this template and replace https://github.com/inerttila/UPLOAD_Fhoto.git with the actual URL of your Git repository. Additionally, you should fill in the sections with relevant content specific to your project.
+
+## Contact
+For inquiries or assistance, feel free to reach out through the following channels:
+
+Email: inert.etila@gmail.com
+LinkedIn: Inert Tila
+You can email me for any questions or support related to this project, and you can also connect with me on LinkedIn to stay updated on my professional activities.
