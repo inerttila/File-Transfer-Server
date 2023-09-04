@@ -82,9 +82,9 @@ Before running the server, you may need to configure the IP address in the serve
 Open the server.py file in a text editor.
 
 Locate the following line of code:
-
+```shell
 app.run(host="your_ip_address_here", port="80")
-
+```
 ## Contact
 
 For inquiries or assistance, feel free to reach out through the following channels:
