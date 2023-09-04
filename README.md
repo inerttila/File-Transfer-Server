@@ -27,18 +27,18 @@ Before you begin, ensure you have met the following requirements:
 
 1. Clone the repository:
 
-   ```shell
-   git clone https://github.com/inerttila/UPLOAD_Fhoto.git
-   ```
+```shell
+git clone https://github.com/inerttila/UPLOAD_Fhoto.git
+```
 
-##Install dependencies:
+## Install dependencies:
 
 ```shell
 pip install -r requirements.txt
 
 ```
 
-##Usage
+## Usage
 To run the application, execute the following command:
 
 ```shell
@@ -49,10 +49,10 @@ python server.py
 This will start the server, and you can access it in your web browser at
 http://localhost:5000.
 
-##Features
+## Features
 File upload functionality
 
-##Contributing
+## Contributing
 Contributions are welcome! Here's how you can contribute:
 
 Fork the project.
