@@ -4,14 +4,14 @@ UPLOAD_Fhoto is a simple Flask-based web application for uploading files.
 
 ## Table of Contents
 
-1. [Introduction](#introduction)
-2. [Prerequisites](#prerequisites)
-3. [Installation](#installation)
-4. [Configuration](#configuration)
-5. [Usage](#usage)
-6. [Features](#features)
-7. [Contributing](#contributing)
-8. [Contact](#Contact)
+- [Introduction](#introduction)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Features](#features)
+- [Contributing](#contributing)
+- [Contact](#Contact)
 
 ## Introduction
 
