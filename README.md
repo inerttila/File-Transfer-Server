@@ -1,5 +1,3 @@
-Software Developer | Python, Django, JavaScript | Docker | Cloud Computing | Web Development
-
 # File Transfer Server
 
 File Transfer Server is a simple Flask-based web application for uploading files.
