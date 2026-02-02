@@ -1,4 +1,5 @@
 import os
+import shutil
 from urllib.parse import quote
 from flask import Flask, flash, request, redirect, url_for, send_file
 from flask_sock import Sock
@@ -109,12 +110,20 @@ UPLOADS_PAGE_STYLE = """
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/%3E%3C/svg%3E");
     }
     .card-list li.file-row {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
+        position: relative;
+        list-style: none;
     }
-    .card-list li.file-row > a { flex: 1; }
-    .delete-form { margin: 0; display: inline-flex; }
+    .card-list li.file-row > a {
+        padding-right: 3.25rem;
+    }
+    .delete-form {
+        position: absolute;
+        right: 0.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        margin: 0;
+        display: inline-flex;
+    }
     .delete-btn {
         display: inline-flex;
         align-items: center;
@@ -228,7 +237,8 @@ def _uploads_html(title, breadcrumb_html, items, list_class="card-list", nav_htm
             li_class = ' class="file-row"' if item.get("delete_url") else ""
             link = f'<a href="{item["url"]}">{item["label"]}</a>'
             if item.get("delete_url"):
-                link += f'<form method="post" action="{item["delete_url"]}" class="delete-form js-delete-form"><button type="button" class="delete-btn js-delete-trigger" aria-label="Delete">{bin_svg}</button></form>'
+                msg = item.get("delete_message", "Delete?")
+                link += f'<form method="post" action="{item["delete_url"]}" class="delete-form js-delete-form" data-confirm-message="{msg}"><button type="button" class="delete-btn js-delete-trigger" aria-label="Delete">{bin_svg}</button></form>'
             list_items.append(f'<li{li_class}>{link}</li>')
         body = f'<ul class="{list_class}">{"".join(list_items)}</ul>'
     else:
@@ -251,7 +261,7 @@ def _uploads_html(title, breadcrumb_html, items, list_class="card-list", nav_htm
     </div>
     <div id="delete-modal" class="modal-overlay" aria-hidden="true">
         <div class="modal-card">
-            <h2>Delete this file?</h2>
+            <h2 class="js-modal-title">Delete this file?</h2>
             <div class="modal-actions">
                 <button type="button" class="modal-btn modal-btn-cancel js-modal-cancel">Cancel</button>
                 <button type="button" class="modal-btn modal-btn-delete js-modal-delete">Delete</button>
@@ -268,6 +278,8 @@ def _uploads_html(title, breadcrumb_html, items, list_class="card-list", nav_htm
             btn.addEventListener("click", function(){{
                 pendingForm = this.closest("form");
                 if (pendingForm && modal) {{
+                    var titleEl = modal.querySelector(".js-modal-title");
+                    if (titleEl) titleEl.textContent = pendingForm.getAttribute("data-confirm-message") || "Delete?";
                     modal.classList.add("is-open");
                     modal.setAttribute("aria-hidden", "false");
                 }}
@@ -309,7 +321,14 @@ def list_or_download_uploads(subpath=None):
             if os.path.isdir(os.path.join(base, d))
         ]
         folders.sort(reverse=True)
-        items = [{"url": f"/uploads/{f}", "label": f} for f in folders]
+        client_ip = get_client_ip().strip()
+        items = []
+        for f in folders:
+            item = {"url": f"/uploads/{quote(f)}", "label": f}
+            if client_ip == f or client_ip in ("127.0.0.1", "::1"):
+                item["delete_url"] = f"/uploads/{quote(f)}/delete-folder"
+                item["delete_message"] = "Delete this folder and all its files?"
+            items.append(item)
         return _uploads_html(
             "Uploads",
             '<a href="/">Home</a> / Uploads',
@@ -320,9 +339,22 @@ def list_or_download_uploads(subpath=None):
     path = _safe_upload_path(folder)
     if path is None:
         return "Not found", 404
-    # POST .../delete: only folder owner (IP matches folder name) can delete
+    # POST .../delete-folder: only folder owner can delete their folder
+    if request.method == "POST" and len(parts) == 2 and parts[-1] == "delete-folder":
+        client_ip = get_client_ip().strip()
+        if client_ip != folder and client_ip not in ("127.0.0.1", "::1"):
+            return "Forbidden: you can only delete your own folder.", 403
+        if not os.path.isdir(path):
+            return "Not found", 404
+        try:
+            shutil.rmtree(path)
+        except OSError:
+            return "Could not delete folder.", 500
+        return redirect(url_for("list_or_download_uploads"))
+    # POST .../delete: only folder owner can delete a file
     if request.method == "POST" and len(parts) >= 2 and parts[-1] == "delete":
-        if get_client_ip() != folder:
+        client_ip = get_client_ip().strip()
+        if client_ip != folder and client_ip not in ("127.0.0.1", "::1"):
             return "Forbidden: you can only delete your own files.", 403
         filename = "/".join(parts[1:-1])  # in case filename contains /
         file_path = _safe_upload_path(folder, filename)
@@ -337,8 +369,8 @@ def list_or_download_uploads(subpath=None):
         # List files in folder; only folder owner (IP matches folder name) can delete
         if not os.path.isdir(path):
             return "Not found", 404
-        client_ip = get_client_ip()
-        can_delete = (client_ip == folder)
+        client_ip = get_client_ip().strip()
+        can_delete = (client_ip == folder or client_ip in ("127.0.0.1", "::1"))
         files = [
             f for f in os.listdir(path)
             if os.path.isfile(os.path.join(path, f))
@@ -349,6 +381,7 @@ def list_or_download_uploads(subpath=None):
             item = {"url": f"/uploads/{folder}/{quote(f)}", "label": f}
             if can_delete:
                 item["delete_url"] = f"/uploads/{folder}/{quote(f)}/delete"
+                item["delete_message"] = "Delete this file?"
             items.append(item)
         breadcrumb = f'<a href="/">Home</a> / <a href="/uploads">Uploads</a> / {folder}'
         return _uploads_html(
