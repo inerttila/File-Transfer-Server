@@ -1,57 +1,24 @@
 # File Transfer Server
 
-File Transfer Server is a simple Flask-based web application for uploading files.
+Flask app for uploading and downloading files over the web.
 
-## Table of Contents
+## Setup
 
-- [Introduction](#introduction)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-
-## Introduction
-
-File Transfer Server is a web application that allows users to upload files.
-
-## Prerequisites
-
-Before you begin, ensure you have met the following requirements:
-
-- Python (>=3.6)
-- Flask (>=1.0)
-- Other dependencies (see [requirements.txt](requirements.txt))
-
-## Installation
-
-1. Clone the repository:
-
-```shell
-  git clone https://github.com/inerttila/File-Transfer-Server.git
+```bash
+pip install -r requirements.txt
+python server.py
 ```
 
-### Install dependencies:
+Runs at **http://0.0.0.0:8069** (port 8069, all interfaces). Use `python server.py 80` for port 80 or `python server.py <port>` for a custom port.
 
-```shell
-  pip install -r requirements.txt
+## How it works
 
-```
-## Configuration
-Before running the server, you may need to configure the IP address in the server.py code. Follow these steps to set your IP address:
+- **Home (`/`)** — Upload: choose files, then click Upload. Progress bar shows while uploading.
+- **Uploads (`/uploads`)** — List folders (one per client IP). Open a folder to list files; click a file to download.
+- Files are stored under `uploads/<client_ip>/`. Client IP is taken from the request (or from `X-Forwarded-For` / `X-Real-IP` when behind a proxy).
+- **WebSocket** — Echo endpoint at `/websocket`.
 
-Open the server.py file in a text editor.
+## Requirements
 
-Locate the following line of code:
-```shell
-  app.run(host="your_ip_address_here", port="80")
-```
-## Usage
-To run the application, execute the following command:
-
-```shell
-  python server.py
-```
-
-This will start the server, and you can access it in your web browser at
-http://localhost:5000.
-
+- Python 3.x
+- See [requirements.txt](requirements.txt)
