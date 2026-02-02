@@ -1,4 +1,5 @@
 import os
+from urllib.parse import quote
 from flask import Flask, flash, request, redirect, url_for, send_file
 from flask_sock import Sock
 from werkzeug.utils import secure_filename
@@ -30,7 +31,6 @@ sock = Sock(app)
 
 @sock.route('/websocket')
 def websocket(ws):
-    """WebSocket endpoint - accepts connections and echoes messages."""
     while True:
         try:
             data = ws.receive()
@@ -46,7 +46,6 @@ def allowed_file(filename):
 
 
 def _safe_upload_path(*parts):
-    """Build path under UPLOAD_FOLDER; return None if path would escape."""
     base = os.path.abspath(app.config["UPLOAD_FOLDER"])
     path = os.path.abspath(os.path.join(base, *parts))
     return path if path.startswith(base) and os.path.exists(path) else None
@@ -109,7 +108,83 @@ UPLOADS_PAGE_STYLE = """
     .card-list.files a::before {
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/%3E%3C/svg%3E");
     }
+    .card-list li.file-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .card-list li.file-row > a { flex: 1; }
+    .delete-form { margin: 0; display: inline-flex; }
+    .delete-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        padding: 0;
+        border: none;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.06);
+        color: #e8e8e8;
+        cursor: pointer;
+        transition: background 0.2s, color 0.2s;
+    }
+    .delete-btn:hover { background: rgba(239, 68, 68, 0.4); color: #fca5a5; }
+    .delete-btn svg { width: 1.1rem; height: 1.1rem; }
     .empty { opacity: 0.8; font-size: 1rem; }
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.6);
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 1rem;
+    }
+    .modal-overlay.is-open { display: flex; }
+    .modal-card {
+        background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 16px;
+        padding: 1.5rem;
+        max-width: 360px;
+        width: 100%;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    }
+    .modal-card h2 {
+        margin: 0 0 1rem 0;
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: #fff;
+    }
+    .modal-actions {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: flex-end;
+        margin-top: 1.25rem;
+    }
+    .modal-btn {
+        padding: 0.5rem 1.25rem;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: background 0.2s, border-color 0.2s, color 0.2s;
+    }
+    .modal-btn-cancel {
+        background: rgba(255,255,255,0.08);
+        color: #e8e8e8;
+        border-color: rgba(255,255,255,0.15);
+    }
+    .modal-btn-cancel:hover { background: rgba(255,255,255,0.14); color: #fff; }
+    .modal-btn-delete {
+        background: rgba(239, 68, 68, 0.25);
+        color: #fca5a5;
+        border-color: rgba(239, 68, 68, 0.5);
+    }
+    .modal-btn-delete:hover { background: rgba(239, 68, 68, 0.4); color: #fecaca; }
     .site-nav {
         display: flex;
         justify-content: center;
@@ -137,20 +212,25 @@ GIPHY_LOGO_URL = "https://media2.giphy.com/media/QssGEmpkyEOhBCb7e1/giphy.gif?ci
 FAVICON_LINK = '<link rel="icon" href="' + GIPHY_LOGO_URL.replace("&", "&amp;") + '" type="image/gif">'
 NAV_LOGO = '<a href="/" class="nav-logo-link"><img src="' + GIPHY_LOGO_URL + '" alt="Logo" class="nav-logo"></a>'
 HOME_ICON = '<svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>'
-NAV_HTML = '<nav class="site-nav">' + NAV_LOGO + '<a href="/">' + HOME_ICON + 'Home</a><a href="/uploads">Uploads</a></nav>'
-NAV_HTML_HOME_ACTIVE = '<nav class="site-nav">' + NAV_LOGO + '<a href="/" class="active">' + HOME_ICON + 'Home</a><a href="/uploads">Uploads</a></nav>'
-NAV_HTML_UPLOADS_ACTIVE = '<nav class="site-nav">' + NAV_LOGO + '<a href="/">' + HOME_ICON + 'Home</a><a href="/uploads" class="active">Uploads</a></nav>'
+UPLOADS_ICON = '<svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>'
+NAV_HTML = '<nav class="site-nav">' + NAV_LOGO + '<a href="/">' + HOME_ICON + 'Home</a><a href="/uploads">' + UPLOADS_ICON + 'Uploads</a></nav>'
+NAV_HTML_HOME_ACTIVE = '<nav class="site-nav">' + NAV_LOGO + '<a href="/" class="active">' + HOME_ICON + 'Home</a><a href="/uploads">' + UPLOADS_ICON + 'Uploads</a></nav>'
+NAV_HTML_UPLOADS_ACTIVE = '<nav class="site-nav">' + NAV_LOGO + '<a href="/">' + HOME_ICON + 'Home</a><a href="/uploads" class="active">' + UPLOADS_ICON + 'Uploads</a></nav>'
 
 
 def _uploads_html(title, breadcrumb_html, items, list_class="card-list", nav_html=None):
     if nav_html is None:
         nav_html = NAV_HTML_UPLOADS_ACTIVE
     if items:
-        list_items = "".join(
-            f'<li><a href="{item["url"]}">{item["label"]}</a></li>'
-            for item in items
-        )
-        body = f'<ul class="{list_class}">{list_items}</ul>'
+        bin_svg = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>'
+        list_items = []
+        for item in items:
+            li_class = ' class="file-row"' if item.get("delete_url") else ""
+            link = f'<a href="{item["url"]}">{item["label"]}</a>'
+            if item.get("delete_url"):
+                link += f'<form method="post" action="{item["delete_url"]}" class="delete-form js-delete-form"><button type="button" class="delete-btn js-delete-trigger" aria-label="Delete">{bin_svg}</button></form>'
+            list_items.append(f'<li{li_class}>{link}</li>')
+        body = f'<ul class="{list_class}">{"".join(list_items)}</ul>'
     else:
         body = '<p class="empty">No items here yet.</p>'
     return f"""<!DOCTYPE html>
@@ -169,12 +249,51 @@ def _uploads_html(title, breadcrumb_html, items, list_class="card-list", nav_htm
         <h1>{title}</h1>
         {body}
     </div>
+    <div id="delete-modal" class="modal-overlay" aria-hidden="true">
+        <div class="modal-card">
+            <h2>Delete this file?</h2>
+            <div class="modal-actions">
+                <button type="button" class="modal-btn modal-btn-cancel js-modal-cancel">Cancel</button>
+                <button type="button" class="modal-btn modal-btn-delete js-modal-delete">Delete</button>
+            </div>
+        </div>
+    </div>
+    <script>
+    (function(){{
+        var modal = document.getElementById("delete-modal");
+        var cancelBtn = document.querySelector(".js-modal-cancel");
+        var deleteBtn = document.querySelector(".js-modal-delete");
+        var pendingForm = null;
+        document.querySelectorAll(".js-delete-trigger").forEach(function(btn){{
+            btn.addEventListener("click", function(){{
+                pendingForm = this.closest("form");
+                if (pendingForm && modal) {{
+                    modal.classList.add("is-open");
+                    modal.setAttribute("aria-hidden", "false");
+                }}
+            }});
+        }});
+        function closeModal(){{
+            modal.classList.remove("is-open");
+            modal.setAttribute("aria-hidden", "true");
+            pendingForm = null;
+        }}
+        if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
+        if (deleteBtn) deleteBtn.addEventListener("click", function(){{
+            if (pendingForm) {{ pendingForm.submit(); }}
+            closeModal();
+        }});
+        if (modal) modal.addEventListener("click", function(e){{
+            if (e.target === modal) closeModal();
+        }});
+    }})();
+    </script>
 </body>
 </html>"""
 
 
-@app.route("/uploads")
-@app.route("/uploads/<path:subpath>")
+@app.route("/uploads", methods=["GET"])
+@app.route("/uploads/<path:subpath>", methods=["GET", "POST"])
 def list_or_download_uploads(subpath=None):
     if not subpath:
         # List folders: date_IP
@@ -201,19 +320,36 @@ def list_or_download_uploads(subpath=None):
     path = _safe_upload_path(folder)
     if path is None:
         return "Not found", 404
+    # POST .../delete: only folder owner (IP matches folder name) can delete
+    if request.method == "POST" and len(parts) >= 2 and parts[-1] == "delete":
+        if get_client_ip() != folder:
+            return "Forbidden: you can only delete your own files.", 403
+        filename = "/".join(parts[1:-1])  # in case filename contains /
+        file_path = _safe_upload_path(folder, filename)
+        if file_path is None or not os.path.isfile(file_path):
+            return "Not found", 404
+        try:
+            os.remove(file_path)
+        except OSError:
+            return "Could not delete file.", 500
+        return redirect(url_for("list_or_download_uploads", subpath=folder))
     if len(parts) == 1:
-        # List files in folder
+        # List files in folder; only folder owner (IP matches folder name) can delete
         if not os.path.isdir(path):
             return "Not found", 404
+        client_ip = get_client_ip()
+        can_delete = (client_ip == folder)
         files = [
             f for f in os.listdir(path)
             if os.path.isfile(os.path.join(path, f))
         ]
         files.sort()
-        items = [
-            {"url": f"/uploads/{folder}/{f}", "label": f}
-            for f in files
-        ]
+        items = []
+        for f in files:
+            item = {"url": f"/uploads/{folder}/{quote(f)}", "label": f}
+            if can_delete:
+                item["delete_url"] = f"/uploads/{folder}/{quote(f)}/delete"
+            items.append(item)
         breadcrumb = f'<a href="/">Home</a> / <a href="/uploads">Uploads</a> / {folder}'
         return _uploads_html(
             folder,
@@ -503,7 +639,7 @@ def upload_file():
     </head>
     <body>
     <div class="home-wrap">
-    <nav class="site-nav"><a href="/" class="nav-logo-link"><img src="https://media2.giphy.com/media/QssGEmpkyEOhBCb7e1/giphy.gif?cid=ecf05e47a0n3gi1bfqntqmob8g9aid1oyj2wr3ds3mg700bl&amp;rid=giphy.gif" alt="Logo" class="nav-logo"></a><a href="/" class="active"><svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>Home</a><a href="/uploads">Uploads</a></nav>
+    <nav class="site-nav"><a href="/" class="nav-logo-link"><img src="https://media2.giphy.com/media/QssGEmpkyEOhBCb7e1/giphy.gif?cid=ecf05e47a0n3gi1bfqntqmob8g9aid1oyj2wr3ds3mg700bl&amp;rid=giphy.gif" alt="Logo" class="nav-logo"></a><a href="/" class="active"><svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>Home</a><a href="/uploads"><svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>Uploads</a></nav>
     <div class="main">
     <form method=post enctype=multipart/form-data>
         <input id="k-upload" onchange="enablethis(this)" class="files" type="file" name="file" multiple>
