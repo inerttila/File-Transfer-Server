@@ -1,11 +1,18 @@
 import os
 import shutil
 from urllib.parse import quote
+import sys
+import pathlib
+
+# Windows: prevent Werkzeug from using socket.fromfd (not supported on Windows).
+# Otherwise a leftover WERKZEUG_RUN_MAIN / WERKZEUG_SERVER_FD can trigger WinError 10038.
+if sys.platform == "win32":
+    os.environ.pop("WERKZEUG_RUN_MAIN", None)
+    os.environ.pop("WERKZEUG_SERVER_FD", None)
+
 from flask import Flask, flash, request, redirect, url_for, send_file
 from flask_sock import Sock
 from werkzeug.utils import secure_filename
-import sys
-import pathlib
 
 
 def get_or_create_folder(folder_path):
@@ -769,18 +776,21 @@ def upload_file():
 
 DEFAULT_PORT = 8069
 
+# On Windows, socket.fromfd() is not supported; disable reloader to avoid fd-based server.
+_RUN_OPTS = {"use_reloader": False} if sys.platform == "win32" else {}
+
 if __name__ == "__main__":
     if len(sys.argv) == 1:
-        app.run(host="0.0.0.0", port=DEFAULT_PORT)
+        app.run(host="0.0.0.0", port=DEFAULT_PORT, **_RUN_OPTS)
     elif sys.argv[-1] == "80":
-        app.run(host="0.0.0.0", port=80)
+        app.run(host="0.0.0.0", port=80, **_RUN_OPTS)
     elif sys.argv[-1] == "help":
         print("\nExamples:\n\tDev: python server.py\n\tDeploy: python server.py 80\n\tDeploy custom port: python server.py <9598>\n\n")
     else:
         try:
             port = int(sys.argv[-1])
-            app.run(host="0.0.0.0", port=port)
+            app.run(host="0.0.0.0", port=port, **_RUN_OPTS)
         except (ValueError, OSError):
             print("Cannot open port", sys.argv[-1])
             print("Running on localhost:" + str(DEFAULT_PORT))
-            app.run(port=DEFAULT_PORT)
+            app.run(port=DEFAULT_PORT, **_RUN_OPTS)
