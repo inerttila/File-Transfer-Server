@@ -1,5 +1,6 @@
 import os
 import shutil
+import json
 from urllib.parse import quote
 import sys
 import pathlib
@@ -10,9 +11,10 @@ if sys.platform == "win32":
     os.environ.pop("WERKZEUG_RUN_MAIN", None)
     os.environ.pop("WERKZEUG_SERVER_FD", None)
 
-from flask import Flask, flash, request, redirect, url_for, send_file
+from flask import Flask, flash, request, redirect, url_for, send_file, session
 from flask_sock import Sock
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 
 
 def get_or_create_folder(folder_path):
@@ -33,8 +35,76 @@ def get_client_ip():
 
 UPLOAD_FOLDER = get_or_create_folder("uploads")
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-in-production")
 sock = Sock(app)
+
+# --- Folder PIN protection (stored hashed locally) ---
+def _pins_path():
+    base = os.path.abspath(app.config["UPLOAD_FOLDER"])
+    return os.path.join(base, ".folder_pins.json")
+
+
+def _load_pins():
+    path = _pins_path()
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_pins(pins):
+    path = _pins_path()
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(pins, f)
+        return True
+    except OSError:
+        return False
+
+
+def folder_has_pin(folder_name):
+    pins = _load_pins()
+    return folder_name in pins and bool(pins[folder_name])
+
+
+def set_folder_pin(folder_name, pin):
+    """Set or remove PIN for folder. pin empty string = remove. Returns (ok, error_msg)."""
+    pins = _load_pins()
+    if not pin or not pin.strip():
+        pins.pop(folder_name, None)
+        return (_save_pins(pins), None)
+    pin_clean = pin.strip()
+    if len(pin_clean) < 4:
+        return (False, "PIN must be at least 4 characters")
+    pins[folder_name] = generate_password_hash(pin_clean, method="pbkdf2:sha256")
+    return (_save_pins(pins), None)
+
+
+def verify_folder_pin(folder_name, pin):
+    pins = _load_pins()
+    stored = pins.get(folder_name)
+    if not stored:
+        return False
+    return check_password_hash(stored, pin)
+
+
+def _unlocked_folders():
+    return set(session.get("unlocked_folders") or [])
+
+
+def _unlock_folder(folder_name):
+    folders = list(_unlocked_folders())
+    if folder_name not in folders:
+        folders.append(folder_name)
+    session["unlocked_folders"] = folders
+
+
+def is_folder_unlocked(folder_name):
+    return folder_name in _unlocked_folders()
 
 
 @sock.route('/websocket')
@@ -121,16 +191,45 @@ UPLOADS_PAGE_STYLE = """
         list-style: none;
     }
     .card-list li.file-row > a {
-        padding-right: 3.25rem;
+        padding-right: 5rem;
     }
-    .delete-form {
+    .row-actions {
         position: absolute;
         right: 0.5rem;
         top: 50%;
         transform: translateY(-50%);
         margin: 0;
+        display: flex;
+        gap: 0.25rem;
+        align-items: center;
+    }
+    .delete-form {
+        margin: 0;
         display: inline-flex;
     }
+    .card-list li.file-row > .delete-form {
+        position: absolute;
+        right: 0.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+    }
+    .pin-menu-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        padding: 0;
+        border: none;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.06);
+        color: #e8e8e8;
+        cursor: pointer;
+        font-size: 1.25rem;
+        line-height: 1;
+        transition: background 0.2s, color 0.2s;
+    }
+    .pin-menu-btn:hover { background: rgba(125, 211, 252, 0.25); color: #7dd3fc; }
     .delete-btn {
         display: inline-flex;
         align-items: center;
@@ -148,6 +247,7 @@ UPLOADS_PAGE_STYLE = """
     .delete-btn:hover { background: rgba(239, 68, 68, 0.4); color: #fca5a5; }
     .delete-btn svg { width: 1.1rem; height: 1.1rem; }
     .empty { opacity: 0.8; font-size: 1rem; }
+    .lock-icon { font-size: 0.9em; opacity: 0.9; margin-right: 0.25rem; }
     .modal-overlay {
         display: none;
         position: fixed;
@@ -201,6 +301,20 @@ UPLOADS_PAGE_STYLE = """
         border-color: rgba(239, 68, 68, 0.5);
     }
     .modal-btn-delete:hover { background: rgba(239, 68, 68, 0.4); color: #fecaca; }
+    .modal-btn-primary { background: #7dd3fc; color: #1a1a2e; }
+    .modal-btn-primary:hover { background: #38bdf8; color: #0f172a; }
+    .pin-modal-input {
+        width: 100%;
+        padding: 0.6rem 0.75rem;
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 10px;
+        background: rgba(0,0,0,0.2);
+        color: #e8e8e8;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+    }
+    .pin-modal-input:focus { outline: none; border-color: #7dd3fc; }
+    .pin-modal-error { color: #fca5a5; font-size: 0.9rem; margin-bottom: 0.5rem; }
     .site-nav {
         display: flex;
         justify-content: center;
@@ -241,11 +355,18 @@ def _uploads_html(title, breadcrumb_html, items, list_class="card-list", nav_htm
         bin_svg = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>'
         list_items = []
         for item in items:
-            li_class = ' class="file-row"' if item.get("delete_url") else ""
-            link = f'<a href="{item["url"]}">{item["label"]}</a>'
+            li_class = ' class="file-row"' if (item.get("delete_url") or item.get("pin_menu")) else ""
+            label_html = ("<span class=\"lock-icon\" title=\"Protected\" aria-hidden=\"true\">&#128274;</span> " if item.get("has_pin") else "") + item["label"]
+            link = f'<a href="{item["url"]}">{label_html}</a>'
+            if item.get("pin_menu"):
+                folder_esc = (item.get("folder_name") or "").replace("&", "&amp;").replace('"', "&quot;")
+                has_pin = "true" if item.get("has_pin") else "false"
+                link += f'<span class="row-actions"><button type="button" class="pin-menu-btn js-pin-menu" data-folder="{folder_esc}" data-has-pin="{has_pin}" aria-label="Folder options">&#8230;</button>'
             if item.get("delete_url"):
                 msg = item.get("delete_message", "Delete?")
                 link += f'<form method="post" action="{item["delete_url"]}" class="delete-form js-delete-form" data-confirm-message="{msg}"><button type="button" class="delete-btn js-delete-trigger" aria-label="Delete">{bin_svg}</button></form>'
+            if item.get("pin_menu"):
+                link += "</span>"
             list_items.append(f'<li{li_class}>{link}</li>')
         body = f'<ul class="{list_class}">{"".join(list_items)}</ul>'
     else:
@@ -272,6 +393,19 @@ def _uploads_html(title, breadcrumb_html, items, list_class="card-list", nav_htm
             <div class="modal-actions">
                 <button type="button" class="modal-btn modal-btn-cancel js-modal-cancel">Cancel</button>
                 <button type="button" class="modal-btn modal-btn-delete js-modal-delete">Delete</button>
+            </div>
+        </div>
+    </div>
+    <div id="pin-modal" class="modal-overlay" aria-hidden="true">
+        <div class="modal-card">
+            <h2 class="js-pin-title">Set a PIN to protect your folder</h2>
+            <p class="js-pin-desc">Protect this folder so only people with the PIN can open it. PIN must be at least 4 characters.</p>
+            <p id="pin-modal-error" class="pin-modal-error" style="display: none;"></p>
+            <input type="password" id="pin-modal-input" class="pin-modal-input" placeholder="Enter PIN" minlength="4" autocomplete="off">
+            <div class="modal-actions">
+                <button type="button" class="modal-btn modal-btn-cancel js-pin-cancel">Cancel</button>
+                <button type="button" class="modal-btn modal-btn-primary js-pin-set">Set PIN</button>
+                <button type="button" class="modal-btn modal-btn-delete js-pin-remove" style="display: none;">Remove PIN</button>
             </div>
         </div>
     </div>
@@ -306,9 +440,201 @@ def _uploads_html(title, breadcrumb_html, items, list_class="card-list", nav_htm
             if (e.target === modal) closeModal();
         }});
     }})();
+    (function(){{
+        var pinModal = document.getElementById("pin-modal");
+        var pinTitle = pinModal && pinModal.querySelector(".js-pin-title");
+        var pinDesc = pinModal && pinModal.querySelector(".js-pin-desc");
+        var pinInput = document.getElementById("pin-modal-input");
+        var pinError = document.getElementById("pin-modal-error");
+        var pinSetBtn = document.querySelector(".js-pin-set");
+        var pinRemoveBtn = document.querySelector(".js-pin-remove");
+        var pinCancelBtn = document.querySelector(".js-pin-cancel");
+        var currentPinFolder = null;
+        function closePinModal(){{
+            if (pinModal) {{ pinModal.classList.remove("is-open"); pinModal.setAttribute("aria-hidden", "true"); }}
+            currentPinFolder = null;
+            if (pinInput) pinInput.value = "";
+            if (pinError) {{ pinError.style.display = "none"; pinError.textContent = ""; }}
+        }}
+        function showPinModal(folder, hasPin){{
+            currentPinFolder = folder;
+            if (pinTitle) pinTitle.textContent = hasPin === "true" ? "Change or remove PIN" : "Set a PIN to protect your folder";
+            if (pinDesc) pinDesc.textContent = hasPin === "true" ? "Enter a new PIN or remove protection." : "Protect this folder so only people with the PIN can open it. PIN must be at least 4 characters.";
+            if (pinRemoveBtn) pinRemoveBtn.style.display = hasPin === "true" ? "inline-block" : "none";
+            if (pinSetBtn) pinSetBtn.textContent = hasPin === "true" ? "Change PIN" : "Set PIN";
+            if (pinModal) {{ pinModal.classList.add("is-open"); pinModal.setAttribute("aria-hidden", "false"); }}
+            if (pinInput) {{ pinInput.value = ""; pinInput.focus(); }}
+            if (pinError) {{ pinError.style.display = "none"; pinError.textContent = ""; }}
+        }}
+        document.querySelectorAll(".js-pin-menu").forEach(function(btn){{
+            btn.addEventListener("click", function(e){{
+                e.preventDefault();
+                var folder = this.getAttribute("data-folder");
+                var hasPin = this.getAttribute("data-has-pin") || "false";
+                if (folder) showPinModal(folder, hasPin);
+            }});
+        }});
+        if (pinCancelBtn) pinCancelBtn.addEventListener("click", closePinModal);
+        if (pinModal) pinModal.addEventListener("click", function(e){{ if (e.target === pinModal) closePinModal(); }});
+        if (pinSetBtn) pinSetBtn.addEventListener("click", function(){{
+            if (!currentPinFolder || !pinInput) return;
+            var pin = pinInput.value;
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/uploads/" + encodeURIComponent(currentPinFolder) + "/set-pin");
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.onload = function(){{
+                if (xhr.status >= 200 && xhr.status < 300) {{ closePinModal(); window.location.reload(); }}
+                else {{
+                    var r = null;
+                    try {{ r = JSON.parse(xhr.responseText); }} catch(z) {{}}
+                    if (pinError) {{ pinError.textContent = (r && r.error) || "Failed to set PIN"; pinError.style.display = "block"; }}
+                }}
+            }};
+            xhr.onerror = function(){{
+                if (pinError) {{ pinError.textContent = "Network error"; pinError.style.display = "block"; }}
+            }};
+            xhr.send(JSON.stringify({{ pin: pin }}));
+        }});
+        if (pinRemoveBtn) pinRemoveBtn.addEventListener("click", function(){{
+            if (!currentPinFolder) return;
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/uploads/" + encodeURIComponent(currentPinFolder) + "/set-pin");
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.onload = function(){{
+                if (xhr.status >= 200 && xhr.status < 300) {{ closePinModal(); window.location.reload(); }}
+                else {{
+                    var r = null;
+                    try {{ r = JSON.parse(xhr.responseText); }} catch(z) {{}}
+                    if (pinError) {{ pinError.textContent = (r && r.error) || "Failed to remove PIN"; pinError.style.display = "block"; }}
+                }}
+            }};
+            xhr.send(JSON.stringify({{ pin: "" }}));
+        }});
+    }})();
     </script>
 </body>
 </html>"""
+
+
+def _pin_entry_html(folder_name, next_url, error=None, form_action=None):
+    if form_action is None:
+        form_action = url_for("pin_entry", folder=folder_name)
+    err = f'<p class="pin-error">{error}</p>' if error else ""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {FAVICON_LINK}
+    <title>Enter PIN – {quote(folder_name)}</title>
+    <style>
+        * {{ box-sizing: border-box; }}
+        body {{
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(145deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e8e8e8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }}
+        .pin-wrap {{
+            max-width: 320px;
+            width: 100%;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+        }}
+        .pin-wrap h1 {{ margin: 0 0 1rem 0; font-size: 1.15rem; color: #fff; }}
+        .pin-wrap p {{ margin: 0 0 1rem 0; opacity: 0.9; font-size: 0.95rem; }}
+        .pin-error {{ color: #fca5a5; margin-bottom: 0.75rem !important; }}
+        .pin-wrap input[type="password"] {{
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 10px;
+            background: rgba(0,0,0,0.2);
+            color: #e8e8e8;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }}
+        .pin-wrap input:focus {{ outline: none; border-color: #7dd3fc; }}
+        .pin-wrap button {{
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 10px;
+            border: none;
+            background: #7dd3fc;
+            color: #1a1a2e;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+        }}
+        .pin-wrap button:hover {{ background: #38bdf8; }}
+        .pin-wrap a {{ color: #7dd3fc; text-decoration: none; font-size: 0.9rem; }}
+        .pin-wrap a:hover {{ text-decoration: underline; }}
+    </style>
+</head>
+<body>
+    <div class="pin-wrap">
+        <h1>This folder is protected</h1>
+        <p>Enter the PIN to open folder &quot;{quote(folder_name)}&quot;.</p>
+        {err}
+        <form method="post" action="{form_action}">
+            <input type="hidden" name="next" value="{quote(next_url or ("/uploads/" + quote(folder_name)))}">
+            <input type="password" name="pin" placeholder="PIN" autofocus minlength="4" required>
+            <button type="submit">Unlock</button>
+        </form>
+        <p style="margin-top: 1rem;"><a href="/uploads">← Back to Uploads</a></p>
+    </div>
+</body>
+</html>"""
+
+
+@app.route("/uploads/<folder>/pin", methods=["GET", "POST"])
+def pin_entry(folder):
+    path = _safe_upload_path(folder)
+    if path is None or not os.path.isdir(path):
+        return "Not found", 404
+    if not folder_has_pin(folder):
+        return redirect(url_for("list_or_download_uploads", subpath=folder))
+    if request.method == "POST":
+        pin = (request.form.get("pin") or "").strip()
+        next_url = request.form.get("next") or url_for("list_or_download_uploads", subpath=folder)
+        if verify_folder_pin(folder, pin):
+            _unlock_folder(folder)
+            return redirect(next_url)
+        return _pin_entry_html(folder, next_url, error="Wrong PIN. Try again."), 401
+    next_url = request.args.get("next") or url_for("list_or_download_uploads", subpath=folder)
+    return _pin_entry_html(folder, next_url)
+
+
+@app.route("/uploads/<folder>/set-pin", methods=["POST"])
+def set_pin(folder):
+    client_ip = get_client_ip().strip()
+    if client_ip != folder and client_ip not in ("127.0.0.1", "::1"):
+        return {"ok": False, "error": "You can only set a PIN for your own folder."}, 403
+    path = _safe_upload_path(folder)
+    if path is None or not os.path.isdir(path):
+        return {"ok": False, "error": "Folder not found."}, 404
+    data = request.get_json(silent=True) or {}
+    pin = (data.get("pin") or "").strip() if isinstance(data.get("pin"), str) else ""
+    ok, err = set_folder_pin(folder, pin)
+    if err:
+        return {"ok": False, "error": err}, 400
+    return {"ok": True, "has_pin": bool(pin)}
+
+
+@app.route("/uploads/<folder>/pin-status", methods=["GET"])
+def pin_status(folder):
+    client_ip = get_client_ip().strip()
+    if client_ip != folder and client_ip not in ("127.0.0.1", "::1"):
+        return {"has_pin": False}, 403
+    return {"has_pin": folder_has_pin(folder)}
 
 
 @app.route("/uploads", methods=["GET"])
@@ -335,6 +661,9 @@ def list_or_download_uploads(subpath=None):
             if client_ip == f or client_ip in ("127.0.0.1", "::1"):
                 item["delete_url"] = f"/uploads/{quote(f)}/delete-folder"
                 item["delete_message"] = "Delete this folder and all its files?"
+                item["pin_menu"] = True
+                item["folder_name"] = f
+                item["has_pin"] = folder_has_pin(f)
             items.append(item)
         return _uploads_html(
             "Uploads",
@@ -376,6 +705,9 @@ def list_or_download_uploads(subpath=None):
         # List files in folder; only folder owner (IP matches folder name) can delete
         if not os.path.isdir(path):
             return "Not found", 404
+        if folder_has_pin(folder) and not is_folder_unlocked(folder):
+            next_url = url_for("list_or_download_uploads", subpath=folder)
+            return redirect(url_for("pin_entry", folder=folder, next=next_url))
         client_ip = get_client_ip().strip()
         can_delete = (client_ip == folder or client_ip in ("127.0.0.1", "::1"))
         files = [
@@ -398,6 +730,8 @@ def list_or_download_uploads(subpath=None):
             list_class="card-list files",
         )
     # Download file: /uploads/folder/filename
+    if folder_has_pin(folder) and not is_folder_unlocked(folder):
+        return redirect(url_for("pin_entry", folder=folder, next=request.url))
     file_path = _safe_upload_path(*parts)
     if file_path is None or not os.path.isfile(file_path):
         return "Not found", 404
