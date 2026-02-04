@@ -178,14 +178,39 @@ def _decrypt_existing_files(folder_name, fernet):
             pass
 
 
-def set_folder_pin(folder_name, pin):
+def _get_fernet_from_current_pin(folder_name, current_pin):
+    rec = _get_pin_record(folder_name)
+    if not isinstance(rec, dict) or not rec.get("encrypted_fek"):
+        return None
+    pin_clean = (current_pin or "").strip()
+    if not pin_clean:
+        return None
+    if not check_password_hash(rec["hash"], pin_clean):
+        return None
+    kek_b64 = _derive_kek(pin_clean, rec["salt"])
+    try:
+        fek_bytes = _decrypt_fek(rec["encrypted_fek"], kek_b64)
+        fek_b64 = base64.urlsafe_b64encode(fek_bytes).decode("ascii") if isinstance(fek_bytes, bytes) else fek_bytes.decode("ascii")
+        return Fernet(fek_b64.encode("ascii"))
+    except Exception:
+        return None
+
+
+def set_folder_pin(folder_name, pin, current_pin=None):
     pins = _load_pins()
     if not pin or not pin.strip():
         rec = pins.get(folder_name)
+        if rec is not None:
+            if not current_pin or not (current_pin or "").strip():
+                return (False, "Please enter your current PIN to remove protection.")
+            if not verify_folder_pin(folder_name, current_pin):
+                return (False, "Wrong PIN.")
         if isinstance(rec, dict) and rec.get("encrypted_fek"):
             fernet = get_fek_for_folder(folder_name)
             if not fernet:
-                return (False, "Open the folder and enter PIN first, then you can remove PIN.")
+                fernet = _get_fernet_from_current_pin(folder_name, current_pin)
+            if not fernet:
+                return (False, "Wrong PIN.")
             _decrypt_existing_files(folder_name, fernet)
         pins.pop(folder_name, None)
         _clear_session_fek(folder_name)
@@ -194,10 +219,18 @@ def set_folder_pin(folder_name, pin):
     if len(pin_clean) < 4:
         return (False, "PIN must be at least 4 characters")
     rec = pins.get(folder_name)
+    # When changing PIN, always verify the current PIN (legacy or new format)
+    if rec is not None:
+        if not current_pin or not (current_pin or "").strip():
+            return (False, "Please enter your current PIN to change it.")
+        if not verify_folder_pin(folder_name, current_pin):
+            return (False, "Wrong current PIN.")
     if isinstance(rec, dict) and rec.get("encrypted_fek"):
         fernet_old = get_fek_for_folder(folder_name)
+        if not fernet_old and current_pin:
+            fernet_old = _get_fernet_from_current_pin(folder_name, current_pin)
         if not fernet_old:
-            return (False, "Open the folder and enter current PIN first, then you can change PIN.")
+            return (False, "Wrong current PIN or open the folder and enter current PIN first, then you can change PIN.")
         _decrypt_existing_files(folder_name, fernet_old)
     salt = os.urandom(SALT_LENGTH)
     salt_b64 = base64.b64encode(salt).decode("ascii")
@@ -433,6 +466,11 @@ UPLOADS_PAGE_STYLE = """
         justify-content: flex-end;
         margin-top: 1.25rem;
     }
+    .modal-actions-top {
+        margin-top: 0;
+        margin-bottom: 0.75rem;
+        justify-content: flex-start;
+    }
     .modal-btn {
         padding: 0.5rem 1.25rem;
         border-radius: 10px;
@@ -552,13 +590,28 @@ def _uploads_html(title, breadcrumb_html, items, list_class="card-list", nav_htm
     <div id="pin-modal" class="modal-overlay" aria-hidden="true">
         <div class="modal-card">
             <h2 class="js-pin-title">Set a PIN to protect your folder</h2>
+            <div class="modal-actions modal-actions-top" id="pin-remove-wrap" style="display: none;">
+                <button type="button" class="modal-btn modal-btn-delete js-pin-remove">Remove PIN</button>
+            </div>
             <p class="js-pin-desc">Protect this folder so only people with the PIN can open it. PIN must be at least 4 characters.</p>
             <p id="pin-modal-error" class="pin-modal-error" style="display: none;"></p>
             <input type="password" id="pin-modal-input" class="pin-modal-input" placeholder="Enter PIN" minlength="4" autocomplete="off">
+            <input type="password" id="pin-modal-new" class="pin-modal-input" placeholder="New PIN" minlength="4" autocomplete="off" style="display: none;">
             <div class="modal-actions">
                 <button type="button" class="modal-btn modal-btn-cancel js-pin-cancel">Cancel</button>
                 <button type="button" class="modal-btn modal-btn-primary js-pin-set">Set PIN</button>
-                <button type="button" class="modal-btn modal-btn-delete js-pin-remove" style="display: none;">Remove PIN</button>
+            </div>
+        </div>
+    </div>
+    <div id="pin-remove-modal" class="modal-overlay" aria-hidden="true" style="z-index: 1001;">
+        <div class="modal-card">
+            <h2>Remove PIN</h2>
+            <p>Enter your current PIN to remove protection from this folder.</p>
+            <p id="pin-remove-error" class="pin-modal-error" style="display: none;"></p>
+            <input type="password" id="pin-remove-input" class="pin-modal-input" placeholder="Current PIN" minlength="4" autocomplete="off">
+            <div class="modal-actions">
+                <button type="button" class="modal-btn modal-btn-cancel js-pin-remove-cancel">Cancel</button>
+                <button type="button" class="modal-btn modal-btn-delete js-pin-remove-confirm">Remove PIN</button>
             </div>
         </div>
     </div>
@@ -598,25 +651,32 @@ def _uploads_html(title, breadcrumb_html, items, list_class="card-list", nav_htm
         var pinTitle = pinModal && pinModal.querySelector(".js-pin-title");
         var pinDesc = pinModal && pinModal.querySelector(".js-pin-desc");
         var pinInput = document.getElementById("pin-modal-input");
+        var pinModalNew = document.getElementById("pin-modal-new");
         var pinError = document.getElementById("pin-modal-error");
         var pinSetBtn = document.querySelector(".js-pin-set");
         var pinRemoveBtn = document.querySelector(".js-pin-remove");
+        var pinRemoveWrap = document.getElementById("pin-remove-wrap");
         var pinCancelBtn = document.querySelector(".js-pin-cancel");
         var currentPinFolder = null;
+        var currentPinFolderHasPin = false;
         function closePinModal(){{
             if (pinModal) {{ pinModal.classList.remove("is-open"); pinModal.setAttribute("aria-hidden", "true"); }}
             currentPinFolder = null;
+            currentPinFolderHasPin = false;
             if (pinInput) pinInput.value = "";
+            if (pinModalNew) {{ pinModalNew.value = ""; }}
             if (pinError) {{ pinError.style.display = "none"; pinError.textContent = ""; }}
         }}
         function showPinModal(folder, hasPin){{
             currentPinFolder = folder;
-            if (pinTitle) pinTitle.textContent = hasPin === "true" ? "Change or remove PIN" : "Set a PIN to protect your folder";
-            if (pinDesc) pinDesc.textContent = hasPin === "true" ? "Enter a new PIN or remove protection." : "Protect this folder so only people with the PIN can open it. PIN must be at least 4 characters.";
-            if (pinRemoveBtn) pinRemoveBtn.style.display = hasPin === "true" ? "inline-block" : "none";
-            if (pinSetBtn) pinSetBtn.textContent = hasPin === "true" ? "Change PIN" : "Set PIN";
+            currentPinFolderHasPin = (hasPin === "true");
+            if (pinTitle) pinTitle.textContent = currentPinFolderHasPin ? "Change or remove PIN" : "Set a PIN to protect your folder";
+            if (pinDesc) pinDesc.textContent = currentPinFolderHasPin ? "To remove protection, enter your current PIN below and click Remove PIN above. To change PIN, enter current and new PIN below and click Change PIN." : "Protect this folder so only people with the PIN can open it. PIN must be at least 4 characters.";
+            if (pinRemoveWrap) pinRemoveWrap.style.display = currentPinFolderHasPin ? "flex" : "none";
+            if (pinSetBtn) pinSetBtn.textContent = currentPinFolderHasPin ? "Change PIN" : "Set PIN";
+            if (pinInput) {{ pinInput.placeholder = currentPinFolderHasPin ? "Current PIN" : "Enter PIN"; pinInput.value = ""; pinInput.focus(); }}
+            if (pinModalNew) {{ pinModalNew.style.display = "block"; pinModalNew.value = ""; pinModalNew.placeholder = currentPinFolderHasPin ? "New PIN" : "Confirm PIN"; }}
             if (pinModal) {{ pinModal.classList.add("is-open"); pinModal.setAttribute("aria-hidden", "false"); }}
-            if (pinInput) {{ pinInput.value = ""; pinInput.focus(); }}
             if (pinError) {{ pinError.style.display = "none"; pinError.textContent = ""; }}
         }}
         document.querySelectorAll(".js-pin-menu").forEach(function(btn){{
@@ -631,7 +691,19 @@ def _uploads_html(title, breadcrumb_html, items, list_class="card-list", nav_htm
         if (pinModal) pinModal.addEventListener("click", function(e){{ if (e.target === pinModal) closePinModal(); }});
         if (pinSetBtn) pinSetBtn.addEventListener("click", function(){{
             if (!currentPinFolder || !pinInput) return;
-            var pin = pinInput.value;
+            var payload;
+            if (currentPinFolderHasPin) {{
+                var currentPin = pinInput.value;
+                var newPin = pinModalNew ? pinModalNew.value : "";
+                if (newPin.length < 4) {{ if (pinError) {{ pinError.textContent = "New PIN must be at least 4 characters"; pinError.style.display = "block"; }} return; }}
+                payload = {{ pin: newPin, current_pin: currentPin }};
+            }} else {{
+                var pin = pinInput.value;
+                var confirmPin = pinModalNew ? pinModalNew.value : "";
+                if (pin.length < 4) {{ if (pinError) {{ pinError.textContent = "PIN must be at least 4 characters"; pinError.style.display = "block"; }} return; }}
+                if (pin !== confirmPin) {{ if (pinError) {{ pinError.textContent = "PIN and Confirm PIN do not match"; pinError.style.display = "block"; }} return; }}
+                payload = {{ pin: pin }};
+            }}
             var xhr = new XMLHttpRequest();
             xhr.open("POST", "/uploads/" + encodeURIComponent(currentPinFolder) + "/set-pin");
             xhr.setRequestHeader("Content-Type", "application/json");
@@ -646,22 +718,48 @@ def _uploads_html(title, breadcrumb_html, items, list_class="card-list", nav_htm
             xhr.onerror = function(){{
                 if (pinError) {{ pinError.textContent = "Network error"; pinError.style.display = "block"; }}
             }};
-            xhr.send(JSON.stringify({{ pin: pin }}));
+            xhr.send(JSON.stringify(payload));
         }});
-        if (pinRemoveBtn) pinRemoveBtn.addEventListener("click", function(){{
+        var pinRemoveModal = document.getElementById("pin-remove-modal");
+        var pinRemoveInput = document.getElementById("pin-remove-input");
+        var pinRemoveError = document.getElementById("pin-remove-error");
+        var pinRemoveCancelBtn = document.querySelector(".js-pin-remove-cancel");
+        var pinRemoveConfirmBtn = document.querySelector(".js-pin-remove-confirm");
+        function openRemovePinModal(){{
             if (!currentPinFolder) return;
+            if (pinRemoveInput) {{ pinRemoveInput.value = ""; pinRemoveInput.focus(); }}
+            if (pinRemoveError) {{ pinRemoveError.style.display = "none"; pinRemoveError.textContent = ""; }}
+            if (pinRemoveModal) {{ pinRemoveModal.classList.add("is-open"); pinRemoveModal.setAttribute("aria-hidden", "false"); }}
+        }}
+        function closeRemovePinModal(){{
+            if (pinRemoveModal) {{ pinRemoveModal.classList.remove("is-open"); pinRemoveModal.setAttribute("aria-hidden", "true"); }}
+            if (pinRemoveInput) pinRemoveInput.value = "";
+            if (pinRemoveError) {{ pinRemoveError.style.display = "none"; pinRemoveError.textContent = ""; }}
+        }}
+        if (pinRemoveBtn) pinRemoveBtn.addEventListener("click", function(){{
+            openRemovePinModal();
+        }});
+        if (pinRemoveCancelBtn) pinRemoveCancelBtn.addEventListener("click", closeRemovePinModal);
+        if (pinRemoveModal) pinRemoveModal.addEventListener("click", function(e){{ if (e.target === pinRemoveModal) closeRemovePinModal(); }});
+        if (pinRemoveConfirmBtn) pinRemoveConfirmBtn.addEventListener("click", function(){{
+            if (!currentPinFolder || !pinRemoveInput) return;
+            var currentPin = pinRemoveInput.value;
+            if (!currentPin || currentPin.length < 4) {{
+                if (pinRemoveError) {{ pinRemoveError.textContent = "Please enter your current PIN"; pinRemoveError.style.display = "block"; }}
+                return;
+            }}
             var xhr = new XMLHttpRequest();
             xhr.open("POST", "/uploads/" + encodeURIComponent(currentPinFolder) + "/set-pin");
             xhr.setRequestHeader("Content-Type", "application/json");
             xhr.onload = function(){{
-                if (xhr.status >= 200 && xhr.status < 300) {{ closePinModal(); window.location.reload(); }}
+                if (xhr.status >= 200 && xhr.status < 300) {{ closeRemovePinModal(); closePinModal(); window.location.reload(); }}
                 else {{
                     var r = null;
                     try {{ r = JSON.parse(xhr.responseText); }} catch(z) {{}}
-                    if (pinError) {{ pinError.textContent = (r && r.error) || "Failed to remove PIN"; pinError.style.display = "block"; }}
+                    if (pinRemoveError) {{ pinRemoveError.textContent = (r && r.error) || "Failed to remove PIN"; pinRemoveError.style.display = "block"; }}
                 }}
             }};
-            xhr.send(JSON.stringify({{ pin: "" }}));
+            xhr.send(JSON.stringify({{ remove: true, current_pin: currentPin }}));
         }});
     }})();
     </script>
@@ -833,9 +931,17 @@ def set_pin(folder):
     path = _safe_upload_path(folder)
     if path is None or not os.path.isdir(path):
         return {"ok": False, "error": "Folder not found."}, 404
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(force=True, silent=True) or {}
     pin = (data.get("pin") or "").strip() if isinstance(data.get("pin"), str) else ""
-    ok, err = set_folder_pin(folder, pin)
+    # Accept current_pin as str or number (e.g. from JSON); normalize to stripped str or None
+    raw_current = data.get("current_pin") if not data.get("remove") else (data.get("current_pin") or data.get("pin"))
+    if raw_current is not None and not isinstance(raw_current, str):
+        raw_current = str(raw_current)
+    current_pin = (raw_current or "").strip() or None
+    remove = data.get("remove") is True
+    if remove:
+        pin = ""
+    ok, err = set_folder_pin(folder, pin, current_pin=current_pin)
     if err:
         return {"ok": False, "error": err}, 400
     return {"ok": True, "has_pin": bool(pin)}
