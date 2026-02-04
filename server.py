@@ -1,6 +1,8 @@
 import os
 import shutil
 import json
+import base64
+from io import BytesIO
 from urllib.parse import quote
 import sys
 import pathlib
@@ -11,10 +13,13 @@ if sys.platform == "win32":
     os.environ.pop("WERKZEUG_RUN_MAIN", None)
     os.environ.pop("WERKZEUG_SERVER_FD", None)
 
-from flask import Flask, flash, request, redirect, url_for, send_file, session
+from flask import Flask, flash, request, redirect, url_for, send_file, session, Response
 from flask_sock import Sock
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
 
 
 def get_or_create_folder(folder_path):
@@ -39,7 +44,11 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-in-production")
 sock = Sock(app)
 
-# --- Folder PIN protection (stored hashed locally) ---
+# --- Folder PIN protection + per-folder encryption (FEK protected by PIN/KEK) ---
+PBKDF2_ITERATIONS = 100_000
+SALT_LENGTH = 16
+
+
 def _pins_path():
     base = os.path.abspath(app.config["UPLOAD_FOLDER"])
     return os.path.join(base, ".folder_pins.json")
@@ -66,30 +75,179 @@ def _save_pins(pins):
         return False
 
 
-def folder_has_pin(folder_name):
+def _get_pin_record(folder_name):
+    """Return raw record: string (legacy hash) or dict with hash, salt, encrypted_fek."""
     pins = _load_pins()
-    return folder_name in pins and bool(pins[folder_name])
+    return pins.get(folder_name)
+
+
+def folder_has_pin(folder_name):
+    rec = _get_pin_record(folder_name)
+    if rec is None:
+        return False
+    if isinstance(rec, str):
+        return bool(rec)
+    return bool(rec.get("hash"))
+
+
+def folder_has_encryption(folder_name):
+    """True if folder uses per-file encryption (new PIN format with FEK)."""
+    rec = _get_pin_record(folder_name)
+    return isinstance(rec, dict) and rec.get("encrypted_fek")
+
+
+def _derive_kek(pin_clean, salt_b64):
+    salt = base64.b64decode(salt_b64)
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=PBKDF2_ITERATIONS,
+    )
+    key_bytes = kdf.derive(pin_clean.encode("utf-8"))
+    return base64.urlsafe_b64encode(key_bytes).decode("ascii")
+
+
+def _decrypt_fek(encrypted_fek_b64, kek_b64):
+    fernet_kek = Fernet(kek_b64.encode("ascii"))
+    return fernet_kek.decrypt(base64.b64decode(encrypted_fek_b64))
+
+
+def _encrypt_fek(fek_bytes, kek_b64):
+    fernet_kek = Fernet(kek_b64.encode("ascii"))
+    return base64.b64encode(fernet_kek.encrypt(fek_bytes)).decode("ascii")
+
+
+def _session_folder_keys():
+    return session.get("folder_keys") or {}
+
+
+def _set_session_fek(folder_name, fek_b64):
+    keys = dict(_session_folder_keys())
+    keys[folder_name] = fek_b64
+    session["folder_keys"] = keys
+
+
+def _clear_session_fek(folder_name):
+    keys = dict(_session_folder_keys())
+    keys.pop(folder_name, None)
+    session["folder_keys"] = keys
+
+
+def get_fek_for_folder(folder_name):
+    """Return Fernet instance for this folder if unlocked and encrypted, else None."""
+    fek_b64 = _session_folder_keys().get(folder_name)
+    if not fek_b64:
+        return None
+    try:
+        return Fernet(fek_b64.encode("ascii"))
+    except Exception:
+        return None
+
+
+def _folder_path(folder_name):
+    return pathlib.Path(app.config["UPLOAD_FOLDER"], folder_name)
+
+
+def _encrypt_existing_files(folder_name, fernet):
+    folder_path = _folder_path(folder_name)
+    if not folder_path.is_dir():
+        return
+    for name in os.listdir(folder_path):
+        fpath = folder_path / name
+        if not fpath.is_file():
+            continue
+        try:
+            data = fpath.read_bytes()
+            encrypted = fernet.encrypt(data)
+            fpath.write_bytes(encrypted)
+        except Exception:
+            pass
+
+
+def _decrypt_existing_files(folder_name, fernet):
+    folder_path = _folder_path(folder_name)
+    if not folder_path.is_dir():
+        return
+    for name in os.listdir(folder_path):
+        fpath = folder_path / name
+        if not fpath.is_file():
+            continue
+        try:
+            data = fpath.read_bytes()
+            decrypted = fernet.decrypt(data)
+            fpath.write_bytes(decrypted)
+        except Exception:
+            pass
 
 
 def set_folder_pin(folder_name, pin):
     """Set or remove PIN for folder. pin empty string = remove. Returns (ok, error_msg)."""
     pins = _load_pins()
     if not pin or not pin.strip():
+        rec = pins.get(folder_name)
+        if isinstance(rec, dict) and rec.get("encrypted_fek"):
+            fernet = get_fek_for_folder(folder_name)
+            if not fernet:
+                return (False, "Open the folder and enter PIN first, then you can remove PIN.")
+            _decrypt_existing_files(folder_name, fernet)
         pins.pop(folder_name, None)
+        _clear_session_fek(folder_name)
         return (_save_pins(pins), None)
     pin_clean = pin.strip()
     if len(pin_clean) < 4:
         return (False, "PIN must be at least 4 characters")
-    pins[folder_name] = generate_password_hash(pin_clean, method="pbkdf2:sha256")
-    return (_save_pins(pins), None)
+    rec = pins.get(folder_name)
+    if isinstance(rec, dict) and rec.get("encrypted_fek"):
+        fernet_old = get_fek_for_folder(folder_name)
+        if not fernet_old:
+            return (False, "Open the folder and enter current PIN first, then you can change PIN.")
+        _decrypt_existing_files(folder_name, fernet_old)
+    salt = os.urandom(SALT_LENGTH)
+    salt_b64 = base64.b64encode(salt).decode("ascii")
+    kek_b64 = _derive_kek(pin_clean, salt_b64)
+    fek = Fernet.generate_key()
+    encrypted_fek_b64 = _encrypt_fek(fek, kek_b64)
+    pin_hash = generate_password_hash(pin_clean, method="pbkdf2:sha256")
+    pins[folder_name] = {
+        "hash": pin_hash,
+        "salt": salt_b64,
+        "encrypted_fek": encrypted_fek_b64,
+    }
+    if not _save_pins(pins):
+        return (False, "Failed to save PIN")
+    fernet = Fernet(fek)
+    _encrypt_existing_files(folder_name, fernet)
+    _set_session_fek(folder_name, fek.decode("ascii"))
+    _unlock_folder(folder_name)
+    return (True, None)
 
 
 def verify_folder_pin(folder_name, pin):
-    pins = _load_pins()
-    stored = pins.get(folder_name)
-    if not stored:
+    rec = _get_pin_record(folder_name)
+    if not rec:
         return False
-    return check_password_hash(stored, pin)
+    if isinstance(rec, str):
+        return check_password_hash(rec, pin)
+    if not check_password_hash(rec["hash"], pin):
+        return False
+    return True
+
+
+def _unlock_folder_with_fek(folder_name, pin):
+    """After PIN verified: put FEK in session if folder uses encryption."""
+    _unlock_folder(folder_name)
+    rec = _get_pin_record(folder_name)
+    if not isinstance(rec, dict) or not rec.get("encrypted_fek"):
+        return
+    pin_clean = pin.strip()
+    kek_b64 = _derive_kek(pin_clean, rec["salt"])
+    try:
+        fek_bytes = _decrypt_fek(rec["encrypted_fek"], kek_b64)
+        fek_b64 = base64.urlsafe_b64encode(fek_bytes).decode("ascii") if isinstance(fek_bytes, bytes) else fek_bytes.decode("ascii")
+        _set_session_fek(folder_name, fek_b64)
+    except Exception:
+        pass
 
 
 def _unlocked_folders():
@@ -606,7 +764,7 @@ def pin_entry(folder):
         pin = (request.form.get("pin") or "").strip()
         next_url = request.form.get("next") or url_for("list_or_download_uploads", subpath=folder)
         if verify_folder_pin(folder, pin):
-            _unlock_folder(folder)
+            _unlock_folder_with_fek(folder, pin)
             return redirect(next_url)
         return _pin_entry_html(folder, next_url, error="Wrong PIN. Try again."), 401
     next_url = request.args.get("next") or url_for("list_or_download_uploads", subpath=folder)
@@ -735,6 +893,20 @@ def list_or_download_uploads(subpath=None):
     file_path = _safe_upload_path(*parts)
     if file_path is None or not os.path.isfile(file_path):
         return "Not found", 404
+    if folder_has_encryption(folder):
+        fernet = get_fek_for_folder(folder)
+        if fernet:
+            try:
+                ciphertext = pathlib.Path(file_path).read_bytes()
+                plaintext = fernet.decrypt(ciphertext)
+                return send_file(
+                    BytesIO(plaintext),
+                    as_attachment=True,
+                    download_name=os.path.basename(file_path),
+                    mimetype="application/octet-stream",
+                )
+            except Exception:
+                return "Decryption failed", 500
     return send_file(file_path, as_attachment=True, download_name=os.path.basename(file_path))
 
 
@@ -753,9 +925,19 @@ def upload_file():
             return redirect(request.url)
         if files:
             upload_dir.mkdir(parents=True, exist_ok=True)
+            folder_name = uploader_ip
+            if folder_has_encryption(folder_name) and not get_fek_for_folder(folder_name):
+                flash("Open your folder and enter PIN first to upload encrypted files.")
+                return redirect(request.url)
+            fernet = get_fek_for_folder(folder_name) if folder_has_encryption(folder_name) else None
             for file in files:
                 filename = secure_filename(file.filename)
-                file.save(upload_dir / filename)
+                content = file.read()
+                out_path = upload_dir / filename
+                if fernet:
+                    out_path.write_bytes(fernet.encrypt(content))
+                else:
+                    out_path.write_bytes(content)
             return redirect(url_for('upload_file', name=filename))
     return '''
     <!doctype html>
