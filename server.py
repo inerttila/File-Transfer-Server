@@ -76,7 +76,6 @@ def _save_pins(pins):
 
 
 def _get_pin_record(folder_name):
-    """Return raw record: string (legacy hash) or dict with hash, salt, encrypted_fek."""
     pins = _load_pins()
     return pins.get(folder_name)
 
@@ -91,7 +90,6 @@ def folder_has_pin(folder_name):
 
 
 def folder_has_encryption(folder_name):
-    """True if folder uses per-file encryption (new PIN format with FEK)."""
     rec = _get_pin_record(folder_name)
     return isinstance(rec, dict) and rec.get("encrypted_fek")
 
@@ -135,7 +133,6 @@ def _clear_session_fek(folder_name):
 
 
 def get_fek_for_folder(folder_name):
-    """Return Fernet instance for this folder if unlocked and encrypted, else None."""
     fek_b64 = _session_folder_keys().get(folder_name)
     if not fek_b64:
         return None
@@ -182,7 +179,6 @@ def _decrypt_existing_files(folder_name, fernet):
 
 
 def set_folder_pin(folder_name, pin):
-    """Set or remove PIN for folder. pin empty string = remove. Returns (ok, error_msg)."""
     pins = _load_pins()
     if not pin or not pin.strip():
         rec = pins.get(folder_name)
@@ -235,7 +231,6 @@ def verify_folder_pin(folder_name, pin):
 
 
 def _unlock_folder_with_fek(folder_name, pin):
-    """After PIN verified: put FEK in session if folder uses encryption."""
     _unlock_folder(folder_name)
     rec = _get_pin_record(folder_name)
     if not isinstance(rec, dict) or not rec.get("encrypted_fek"):
@@ -674,6 +669,63 @@ def _uploads_html(title, breadcrumb_html, items, list_class="card-list", nav_htm
 </html>"""
 
 
+def _folder_not_found_html(folder_name):
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {FAVICON_LINK}
+    <title>Folder not found</title>
+    <style>
+        * {{ box-sizing: border-box; }}
+        body {{
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(145deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e8e8e8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }}
+        .not-found-wrap {{
+            max-width: 360px;
+            width: 100%;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            text-align: center;
+        }}
+        .not-found-wrap h1 {{ margin: 0 0 0.75rem 0; font-size: 1.25rem; color: #fff; }}
+        .not-found-wrap p {{ margin: 0 0 1.25rem 0; opacity: 0.9; font-size: 0.95rem; }}
+        .not-found-wrap a {{
+            display: inline-block;
+            padding: 0.65rem 1.5rem;
+            border-radius: 10px;
+            background: #7dd3fc;
+            color: #1a1a2e;
+            font-weight: 600;
+            font-size: 1rem;
+            text-decoration: none;
+            transition: background 0.2s;
+        }}
+        .not-found-wrap a:hover {{ background: #38bdf8; }}
+    </style>
+</head>
+<body>
+    <div class="not-found-wrap">
+        <h1>Folder not found</h1>
+        <p>The folder does not exist. It may have been deleted.</p>
+        <a href="/uploads">Go back</a>
+    </div>
+</body>
+</html>"""
+
+
 def _pin_entry_html(folder_name, next_url, error=None, form_action=None):
     if form_action is None:
         form_action = url_for("pin_entry", folder=folder_name)
@@ -776,6 +828,8 @@ def set_pin(folder):
     client_ip = get_client_ip().strip()
     if client_ip != folder and client_ip not in ("127.0.0.1", "::1"):
         return {"ok": False, "error": "You can only set a PIN for your own folder."}, 403
+    folder_path = pathlib.Path(app.config["UPLOAD_FOLDER"], folder)
+    folder_path.mkdir(parents=True, exist_ok=True)
     path = _safe_upload_path(folder)
     if path is None or not os.path.isdir(path):
         return {"ok": False, "error": "Folder not found."}, 404
@@ -793,6 +847,20 @@ def pin_status(folder):
     if client_ip != folder and client_ip not in ("127.0.0.1", "::1"):
         return {"has_pin": False}, 403
     return {"has_pin": folder_has_pin(folder)}
+
+
+@app.route("/api/uploader-folder", methods=["GET"])
+def api_uploader_folder():
+    """Return the current client's folder name (IP) for use on home page."""
+    return {"folder": get_client_ip().strip()}
+
+
+@app.route("/api/uploader-has-folder", methods=["GET"])
+def api_uploader_has_folder():
+    """Return whether the current client already has a folder (fresh user = false)."""
+    folder = get_client_ip().strip()
+    path = pathlib.Path(app.config["UPLOAD_FOLDER"], folder)
+    return {"has_folder": path.is_dir()}
 
 
 @app.route("/uploads", methods=["GET"])
@@ -832,7 +900,7 @@ def list_or_download_uploads(subpath=None):
     folder = parts[0]
     path = _safe_upload_path(folder)
     if path is None:
-        return "Not found", 404
+        return _folder_not_found_html(folder), 404
     # POST .../delete-folder: only folder owner can delete their folder
     if request.method == "POST" and len(parts) == 2 and parts[-1] == "delete-folder":
         client_ip = get_client_ip().strip()
@@ -862,7 +930,7 @@ def list_or_download_uploads(subpath=None):
     if len(parts) == 1:
         # List files in folder; only folder owner (IP matches folder name) can delete
         if not os.path.isdir(path):
-            return "Not found", 404
+            return _folder_not_found_html(folder), 404
         if folder_has_pin(folder) and not is_folder_unlocked(folder):
             next_url = url_for("list_or_download_uploads", subpath=folder)
             return redirect(url_for("pin_entry", folder=folder, next=next_url))
@@ -996,6 +1064,20 @@ def upload_file():
     .site-nav .nav-icon { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
     .site-nav .nav-logo-link { margin-right: 0.25rem; }
     .site-nav .nav-logo { height: 2rem; width: auto; display: block; max-height: 2rem; }
+    .home-info {
+        max-width: 520px;
+        width: 100%;
+        margin-bottom: 1.5rem;
+        padding: 0.9rem 1.1rem;
+        background: rgba(125, 211, 252, 0.08);
+        border: 1px solid rgba(125, 211, 252, 0.25);
+        border-radius: 12px;
+        color: #e8e8e8;
+        font-size: clamp(0.85rem, 2.2vw, 0.95rem);
+        line-height: 1.45;
+        text-align: center;
+    }
+    .home-info strong { color: #7dd3fc; }
     input[type="file"] { display: none; }
     input[type="submit"] { display: none; }
     .custom-file-upload {
@@ -1191,11 +1273,24 @@ def upload_file():
             animation: borderScale var(--t) linear infinite alternate;
         }
     }
+    .home-encrypt-modal, .home-pin-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
+    .home-encrypt-modal.is-open, .home-pin-modal.is-open { display: flex; }
+    .home-encrypt-card, .home-pin-card { background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%); border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 1.5rem; max-width: 360px; width: 100%; box-shadow: 0 20px 50px rgba(0,0,0,0.4); }
+    .home-encrypt-card h2, .home-pin-card h2 { margin: 0 0 0.75rem 0; font-size: 1.1rem; color: #fff; }
+    .home-encrypt-card p, .home-pin-card p { margin: 0 0 1rem 0; font-size: 0.95rem; opacity: 0.9; }
+    .home-modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; flex-wrap: wrap; margin-top: 1rem; }
+    .home-modal-btn { padding: 0.5rem 1.25rem; border-radius: 10px; font-size: 0.95rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+    .home-modal-btn-secondary { background: rgba(255,255,255,0.08); color: #e8e8e8; }
+    .home-modal-btn-primary { background: #7dd3fc; color: #1a1a2e; }
+    .home-pin-card input[type="password"] { width: 100%; padding: 0.6rem 0.75rem; border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; background: rgba(0,0,0,0.2); color: #e8e8e8; font-size: 1rem; margin-bottom: 0.5rem; }
+    .home-pin-card .home-pin-error { color: #fca5a5; font-size: 0.85rem; margin-bottom: 0.5rem; }
     </style>
     </head>
     <body>
+    <script>window.UPLOADER_FOLDER = UPLOADER_FOLDER_PLACEHOLDER;</script>
     <div class="home-wrap">
     <nav class="site-nav"><a href="/" class="nav-logo-link"><img src="https://media2.giphy.com/media/QssGEmpkyEOhBCb7e1/giphy.gif?cid=ecf05e47a0n3gi1bfqntqmob8g9aid1oyj2wr3ds3mg700bl&amp;rid=giphy.gif" alt="Logo" class="nav-logo"></a><a href="/" class="active"><svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>Home</a><a href="/uploads"><svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>Uploads</a></nav>
+    <p class="home-info"><strong>PIN-protected uploads are encrypted.</strong> Files in folders with a PIN are encrypted with cryptography; even an admin cannot access them. Don&rsquo;t lose your PIN.</p>
     <div class="main">
     <form method=post enctype=multipart/form-data>
         <input id="k-upload" onchange="enablethis(this)" class="files" type="file" name="file" multiple>
@@ -1204,7 +1299,7 @@ def upload_file():
         </label>
 
 
-        <input onclick="transit()" id="file-upload" class="submiter" disabled type=submit value="Upload">
+        <input id="file-upload" class="submiter" disabled type=submit value="Upload">
         <label for="file-upload" class="custom-file-upload upload">
             <span class="btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg></span>Upload
         </label>
@@ -1217,18 +1312,44 @@ def upload_file():
     </div>
     </div>
     <div id="body">
-        <div class="progress-wrap">
+        <div class="loading-gif-wrap">
             <div class="label"><span id="progress-label">Uploading…</span><span id="progress-pct">0%</span></div>
-            <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
         </div>
         <div class="spinner"></div>
     </div>
+    <div id="home-encrypt-modal" class="home-encrypt-modal" aria-hidden="true">
+        <div class="home-encrypt-card">
+            <h2>Do you want your folder encrypted?</h2>
+            <p>Your files will be encrypted with a PIN. Only you (or anyone with the PIN) can open the folder. Don&rsquo;t lose your PIN.</p>
+            <div class="home-modal-actions">
+                <button type="button" class="home-modal-btn home-modal-btn-secondary" id="home-encrypt-no">No</button>
+                <button type="button" class="home-modal-btn home-modal-btn-primary" id="home-encrypt-yes">Yes</button>
+            </div>
+        </div>
+    </div>
+    <div id="home-pin-modal" class="home-pin-modal" aria-hidden="true">
+        <div class="home-pin-card">
+            <h2>Enter your PIN for the folder</h2>
+            <p>Choose a PIN (at least 4 characters). Your uploads will be encrypted.</p>
+            <p id="home-pin-error" class="home-pin-error" style="display: none;"></p>
+            <input type="password" id="home-pin-input" placeholder="PIN" minlength="4" autocomplete="off">
+            <input type="password" id="home-pin-confirm" placeholder="Confirm PIN" minlength="4" autocomplete="off">
+            <div class="home-modal-actions">
+                <button type="button" class="home-modal-btn home-modal-btn-secondary" id="home-pin-cancel">Cancel</button>
+                <button type="button" class="home-modal-btn home-modal-btn-primary" id="home-pin-set">Set PIN &amp; Upload</button>
+            </div>
+        </div>
+    </div>
     <script>
     function transit(){
-        document.getElementById("body").style.visibility = "visible";
-        document.getElementById("progress-bar").style.width = "0%";
-        document.getElementById("progress-pct").textContent = "0%";
-        document.getElementById("progress-label").textContent = "Uploading…";
+        var body = document.getElementById("body");
+        if (body) body.style.visibility = "visible";
+        var bar = document.getElementById("progress-bar");
+        if (bar) bar.style.width = "0%";
+        var pct = document.getElementById("progress-pct");
+        if (pct) pct.textContent = "0%";
+        var label = document.getElementById("progress-label");
+        if (label) label.textContent = "Uploading…";
     }
     function enablethis(e){
         var uploadBtn = document.getElementsByClassName("upload")[0];
@@ -1248,8 +1369,12 @@ def upload_file():
     (function(){
         var form = document.querySelector('form[method=post][enctype*=multipart]');
         if (!form) return;
-        form.addEventListener('submit', function(ev){
-            ev.preventDefault();
+        var encryptModal = document.getElementById("home-encrypt-modal");
+        var pinModal = document.getElementById("home-pin-modal");
+        var pinInput = document.getElementById("home-pin-input");
+        var pinConfirm = document.getElementById("home-pin-confirm");
+        var pinError = document.getElementById("home-pin-error");
+        function doUpload(){
             transit();
             var fd = new FormData(form);
             var xhr = new XMLHttpRequest();
@@ -1257,37 +1382,99 @@ def upload_file():
             var pct = document.getElementById("progress-pct");
             var label = document.getElementById("progress-label");
             xhr.upload.addEventListener('progress', function(e){
-                if (e.lengthComputable) {
+                if (e.lengthComputable && pct) {
                     var percent = Math.round((e.loaded / e.total) * 100);
-                    bar.style.width = percent + "%";
+                    if (bar) bar.style.width = percent + "%";
                     pct.textContent = percent + "%";
-                } else {
-                    pct.textContent = "...";
-                }
+                } else if (pct) { pct.textContent = "..."; }
             });
             xhr.addEventListener('load', function(){
                 if (xhr.status >= 200 && xhr.status < 300) {
-                    label.textContent = "Done!";
-                    bar.style.width = "100%";
-                    pct.textContent = "100%";
+                    if (label) label.textContent = "Done!";
+                    if (bar) bar.style.width = "100%";
+                    if (pct) pct.textContent = "100%";
                     setTimeout(function(){ window.location.href = "/"; }, 600);
                 } else {
-                    label.textContent = "Upload failed";
-                    setTimeout(function(){ document.getElementById("body").style.visibility = "hidden"; }, 2000);
+                    if (label) label.textContent = "Upload failed";
+                    setTimeout(function(){ var b = document.getElementById("body"); if (b) b.style.visibility = "hidden"; }, 2000);
                 }
             });
             xhr.addEventListener('error', function(){
-                label.textContent = "Upload failed";
-                setTimeout(function(){ document.getElementById("body").style.visibility = "hidden"; }, 2000);
+                if (label) label.textContent = "Upload failed";
+                setTimeout(function(){ var b = document.getElementById("body"); if (b) b.style.visibility = "hidden"; }, 2000);
             });
             xhr.open('POST', form.action || '/');
             xhr.send(fd);
+        }
+        function showEncryptModal(){ if (encryptModal) { encryptModal.classList.add("is-open"); encryptModal.setAttribute("aria-hidden", "false"); } }
+        function hideEncryptModal(){ if (encryptModal) { encryptModal.classList.remove("is-open"); encryptModal.setAttribute("aria-hidden", "true"); } }
+        function showPinModal(){ if (pinModal) { pinModal.classList.add("is-open"); pinModal.setAttribute("aria-hidden", "false"); if (pinInput) pinInput.value = ""; if (pinConfirm) pinConfirm.value = ""; if (pinError) { pinError.style.display = "none"; pinError.textContent = ""; } if (pinInput) pinInput.focus(); } }
+        function hidePinModal(){ if (pinModal) { pinModal.classList.remove("is-open"); pinModal.setAttribute("aria-hidden", "true"); } }
+        document.getElementById("home-encrypt-no").addEventListener("click", function(){ hideEncryptModal(); doUpload(); });
+        document.getElementById("home-encrypt-yes").addEventListener("click", function(){ hideEncryptModal(); showPinModal(); });
+        document.getElementById("home-pin-cancel").addEventListener("click", function(){ hidePinModal(); doUpload(); });
+        document.getElementById("home-pin-set").addEventListener("click", function(){
+            var pin = pinInput ? pinInput.value : "";
+            var conf = pinConfirm ? pinConfirm.value : "";
+            if (pin.length < 4) { if (pinError) { pinError.textContent = "PIN must be at least 4 characters"; pinError.style.display = "block"; } return; }
+            if (pin !== conf) { if (pinError) { pinError.textContent = "PIN and Confirm PIN do not match"; pinError.style.display = "block"; } return; }
+            var folder = window.UPLOADER_FOLDER;
+            if (!folder) { doUpload(); return; }
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/uploads/" + encodeURIComponent(folder) + "/set-pin");
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.onload = function(){
+                if (xhr.status >= 200 && xhr.status < 300) { hidePinModal(); doUpload(); }
+                else { var r = null; try { r = JSON.parse(xhr.responseText); } catch(z) {} if (pinError) { pinError.textContent = (r && r.error) || "Failed to set PIN"; pinError.style.display = "block"; } }
+            };
+            xhr.onerror = function(){ if (pinError) { pinError.textContent = "Network error"; pinError.style.display = "block"; } };
+            xhr.send(JSON.stringify({ pin: pin }));
         });
+        function getFolderThen(fn){
+            var folder = window.UPLOADER_FOLDER;
+            if (folder) { fn(folder); return; }
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/api/uploader-folder");
+            xhr.onload = function(){
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try { var r = JSON.parse(xhr.responseText); folder = r && r.folder; } catch(z) {}
+                    if (folder) window.UPLOADER_FOLDER = folder;
+                }
+                fn(window.UPLOADER_FOLDER || null);
+            };
+            xhr.onerror = function(){ fn(null); };
+            xhr.send();
+        }
+        function startUploadFlow(){
+            var hasFolderXhr = new XMLHttpRequest();
+            hasFolderXhr.open("GET", "/api/uploader-has-folder");
+            hasFolderXhr.onload = function(){
+                var hasFolder = true;
+                try { var r = JSON.parse(hasFolderXhr.responseText); hasFolder = r && r.has_folder; } catch(z) {}
+                if (hasFolder) { doUpload(); return; }
+                getFolderThen(function(folder){
+                    if (!folder) { doUpload(); return; }
+                    showEncryptModal();
+                });
+            };
+            hasFolderXhr.onerror = function(){ doUpload(); };
+            hasFolderXhr.send();
+        }
+        var uploadBtn = document.getElementById("file-upload");
+        var uploadLabel = form.querySelector('label[for="file-upload"]');
+        function interceptUpload(ev){
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (!form.checkValidity || form.checkValidity()) startUploadFlow();
+        }
+        if (uploadBtn) uploadBtn.addEventListener("click", interceptUpload, true);
+        if (uploadLabel) uploadLabel.addEventListener("click", interceptUpload, true);
+        form.addEventListener("submit", function(ev){ ev.preventDefault(); ev.stopPropagation(); });
     })();
     </script>
     </body>
     </html>
-    '''
+    '''.replace("UPLOADER_FOLDER_PLACEHOLDER", json.dumps(uploader_ip))
 
 
 DEFAULT_PORT = 8069
