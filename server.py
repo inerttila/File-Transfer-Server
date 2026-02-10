@@ -2,6 +2,8 @@ import os
 import shutil
 import json
 import base64
+import time
+import secrets
 from io import BytesIO
 from urllib.parse import quote
 import sys
@@ -14,6 +16,7 @@ if sys.platform == "win32":
     os.environ.pop("WERKZEUG_SERVER_FD", None)
 
 from flask import Flask, flash, request, redirect, url_for, send_file, session, Response
+from itsdangerous import URLSafeTimedSerializer, BadSignature
 from flask_sock import Sock
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -47,6 +50,95 @@ sock = Sock(app)
 # --- Folder PIN protection + per-folder encryption (FEK protected by PIN/KEK) ---
 PBKDF2_ITERATIONS = 100_000
 SALT_LENGTH = 16
+
+# Cross-IP unlock: server-side token store so PIN-unlock works from another PC (different IP).
+# Cookie holds signed folder->token; server store holds token->(folder, fek, expires).
+FT_UNLOCKS_COOKIE = "FT_UNLOCKS"
+FT_UNLOCKS_MAX_AGE_DAYS = 7
+FT_UNLOCKS_MAX_AGE_SEC = FT_UNLOCKS_MAX_AGE_DAYS * 24 * 3600
+_unlock_store = {}  # token -> {"folder": str, "fek": str, "expires": float}
+
+
+def _unlock_serializer():
+    return URLSafeTimedSerializer(app.secret_key, salt="ft-unlocks")
+
+
+def _unlock_store_cleanup():
+    """Remove expired entries from _unlock_store."""
+    now = time.time()
+    expired = [t for t, v in _unlock_store.items() if v["expires"] <= now]
+    for t in expired:
+        _unlock_store.pop(t, None)
+
+
+def _unlock_store_add(folder_name, fek_b64):
+    """Store FEK for folder; returns token to put in cookie."""
+    _unlock_store_cleanup()
+    token = secrets.token_urlsafe(32)
+    _unlock_store[token] = {
+        "folder": folder_name,
+        "fek": fek_b64,
+        "expires": time.time() + FT_UNLOCKS_MAX_AGE_SEC,
+    }
+    return token
+
+
+def _unlock_store_get(token):
+    """Return (folder_name, fek_b64) or (None, None) if invalid/expired."""
+    _unlock_store_cleanup()
+    entry = _unlock_store.get(token)
+    if not entry or entry["expires"] <= time.time():
+        return None, None
+    return entry["folder"], entry["fek"]
+
+
+def _unlock_store_revoke_folder(folder_name):
+    """Remove all server-side unlock tokens for this folder (e.g. after PIN remove/change)."""
+    to_remove = [t for t, v in _unlock_store.items() if v["folder"] == folder_name]
+    for t in to_remove:
+        _unlock_store.pop(t, None)
+
+
+def _get_unlock_cookie_data():
+    """Return parsed cookie payload: dict folder_name -> token, or {}."""
+    raw = request.cookies.get(FT_UNLOCKS_COOKIE)
+    if not raw:
+        return {}
+    try:
+        payload = _unlock_serializer().loads(raw, max_age=FT_UNLOCKS_MAX_AGE_SEC)
+        return payload.get("folders") or {}
+    except (BadSignature, Exception):
+        return {}
+
+
+def _get_fek_from_unlock_cookie(folder_name):
+    """If request has valid unlock cookie for this folder, return Fernet instance else None."""
+    cookies = _get_unlock_cookie_data()
+    token = cookies.get(folder_name)
+    if not token:
+        return None
+    _, fek_b64 = _unlock_store_get(token)
+    if not fek_b64:
+        return None
+    try:
+        return Fernet(fek_b64.encode("ascii"))
+    except Exception:
+        return None
+
+
+def _set_unlock_cookie_on_response(response, folder_name, token):
+    """Merge this folder->token into the FT_UNLOCKS cookie and set on response."""
+    current = _get_unlock_cookie_data()
+    current[folder_name] = token
+    payload = _unlock_serializer().dumps({"folders": current})
+    response.set_cookie(
+        FT_UNLOCKS_COOKIE,
+        payload,
+        max_age=FT_UNLOCKS_MAX_AGE_SEC,
+        path="/",
+        samesite="Lax",
+        httponly=True,
+    )
 
 
 def _pins_path():
@@ -133,13 +225,14 @@ def _clear_session_fek(folder_name):
 
 
 def get_fek_for_folder(folder_name):
+    """Return Fernet for folder from session (same IP) or from unlock cookie (other IP with PIN)."""
     fek_b64 = _session_folder_keys().get(folder_name)
-    if not fek_b64:
-        return None
-    try:
-        return Fernet(fek_b64.encode("ascii"))
-    except Exception:
-        return None
+    if fek_b64:
+        try:
+            return Fernet(fek_b64.encode("ascii"))
+        except Exception:
+            pass
+    return _get_fek_from_unlock_cookie(folder_name)
 
 
 def _folder_path(folder_name):
@@ -209,12 +302,16 @@ def set_folder_pin(folder_name, pin, current_pin=None):
             fernet = get_fek_for_folder(folder_name)
             if not fernet:
                 fernet = _get_fernet_from_current_pin(folder_name, current_pin)
-            if not fernet:
-                return (False, "Wrong PIN.")
+        if not fernet:
+            return (False, "Wrong PIN.")
             _decrypt_existing_files(folder_name, fernet)
+        # Remove folder from in-memory pins and persist to .folder_pins.json
         pins.pop(folder_name, None)
         _clear_session_fek(folder_name)
-        return (_save_pins(pins), None)
+        _unlock_store_revoke_folder(folder_name)
+        if not _save_pins(pins):
+            return (False, "Failed to update PIN file. Please try again.")
+        return (True, None)
     pin_clean = pin.strip()
     if len(pin_clean) < 4:
         return (False, "PIN must be at least 4 characters")
@@ -245,6 +342,7 @@ def set_folder_pin(folder_name, pin, current_pin=None):
     }
     if not _save_pins(pins):
         return (False, "Failed to save PIN")
+    _unlock_store_revoke_folder(folder_name)
     fernet = Fernet(fek)
     _encrypt_existing_files(folder_name, fernet)
     _set_session_fek(folder_name, fek.decode("ascii"))
@@ -290,7 +388,10 @@ def _unlock_folder(folder_name):
 
 
 def is_folder_unlocked(folder_name):
-    return folder_name in _unlocked_folders()
+    """True if folder is unlocked in session (same IP) or via valid unlock cookie (other IP)."""
+    if folder_name in _unlocked_folders():
+        return True
+    return _get_fek_from_unlock_cookie(folder_name) is not None
 
 
 @sock.route('/websocket')
@@ -915,7 +1016,14 @@ def pin_entry(folder):
         next_url = request.form.get("next") or url_for("list_or_download_uploads", subpath=folder)
         if verify_folder_pin(folder, pin):
             _unlock_folder_with_fek(folder, pin)
-            return redirect(next_url)
+            resp = redirect(next_url)
+            # Persist unlock for this folder so list/download from this browser (e.g. other IP) don't ask PIN again
+            if folder_has_encryption(folder):
+                fek_b64 = _session_folder_keys().get(folder)
+                if fek_b64:
+                    token = _unlock_store_add(folder, fek_b64)
+                    _set_unlock_cookie_on_response(resp, folder, token)
+            return resp
         return _pin_entry_html(folder, next_url, error="Wrong PIN. Try again."), 401
     next_url = request.args.get("next") or url_for("list_or_download_uploads", subpath=folder)
     return _pin_entry_html(folder, next_url)
