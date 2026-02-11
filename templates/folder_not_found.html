@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{{ favicon_url }}" type="image/gif">
+    <title>Folder not found</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/folder_not_found.css') }}">
+</head>
+<body>
+    <div class="not-found-wrap">
+        <h1>Folder not found</h1>
+        <p>The folder does not exist. It may have been deleted.</p>
+        <a href="/uploads">Go back</a>
+    </div>
+</body>
+</html>

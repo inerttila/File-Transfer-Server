@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{{ favicon_url }}" type="image/gif">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/uploads.css') }}">
+</head>
+<body>
+    <div class="uploads-wrap">
+        {{ nav_html|safe }}
+        <nav class="breadcrumb">{{ breadcrumb_html|safe }}</nav>
+        <h1>{{ title }}</h1>
+        {{ body_html|safe }}
+    </div>
+    <div id="delete-modal" class="modal-overlay" aria-hidden="true">
+        <div class="modal-card">
+            <h2 class="js-modal-title">Delete this file?</h2>
+            <div class="modal-actions">
+                <button type="button" class="modal-btn modal-btn-cancel js-modal-cancel">Cancel</button>
+                <button type="button" class="modal-btn modal-btn-delete js-modal-delete">Delete</button>
+            </div>
+        </div>
+    </div>
+    <div id="pin-modal" class="modal-overlay" aria-hidden="true">
+        <div class="modal-card">
+            <h2 class="js-pin-title">Set a PIN to protect your folder</h2>
+            <div class="modal-actions modal-actions-top" id="pin-remove-wrap" style="display: none;">
+                <button type="button" class="modal-btn modal-btn-delete js-pin-remove">Remove PIN</button>
+            </div>
+            <p class="js-pin-desc">Protect this folder so only people with the PIN can open it. PIN must be at least 4 characters.</p>
+            <p id="pin-modal-error" class="pin-modal-error" style="display: none;"></p>
+            <input type="password" id="pin-modal-input" class="pin-modal-input" placeholder="Enter PIN" minlength="4" autocomplete="off">
+            <input type="password" id="pin-modal-new" class="pin-modal-input" placeholder="New PIN" minlength="4" autocomplete="off" style="display: none;">
+            <div class="modal-actions">
+                <button type="button" class="modal-btn modal-btn-cancel js-pin-cancel">Cancel</button>
+                <button type="button" class="modal-btn modal-btn-primary js-pin-set">Set PIN</button>
+            </div>
+        </div>
+    </div>
+    <div id="pin-remove-modal" class="modal-overlay" aria-hidden="true" style="z-index: 1001;">
+        <div class="modal-card">
+            <h2>Remove PIN</h2>
+            <p>Enter your current PIN to remove protection from this folder.</p>
+            <p id="pin-remove-error" class="pin-modal-error" style="display: none;"></p>
+            <input type="password" id="pin-remove-input" class="pin-modal-input" placeholder="Current PIN" minlength="4" autocomplete="off">
+            <div class="modal-actions">
+                <button type="button" class="modal-btn modal-btn-cancel js-pin-remove-cancel">Cancel</button>
+                <button type="button" class="modal-btn modal-btn-delete js-pin-remove-confirm">Remove PIN</button>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/uploads.js') }}"></script>
+</body>
+</html>

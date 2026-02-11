@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{{ favicon_url }}" type="image/gif">
+    <title>Enter PIN - {{ folder_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/pin_entry.css') }}">
+</head>
+<body>
+    <div class="pin-wrap">
+        <h1>This folder is protected</h1>
+        <p>Enter the PIN to open folder "{{ folder_name }}".</p>
+        {% if error %}
+        <p class="pin-error">{{ error }}</p>
+        {% endif %}
+        <form method="post" action="{{ form_action }}">
+            <input type="hidden" name="next" value="{{ next_value }}">
+            <input type="password" name="pin" placeholder="PIN" autofocus minlength="4" required>
+            <button type="submit">Unlock</button>
+        </form>
+        <p style="margin-top: 1rem;"><a href="/uploads">← Back to Uploads</a></p>
+    </div>
+</body>
+</html>

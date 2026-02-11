@@ -1,0 +1,210 @@
+* { box-sizing: border-box; }
+body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+    background: linear-gradient(145deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #e8e8e8;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.uploads-wrap { max-width: 640px; width: 100%; margin-top: -20rem; }
+h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+    color: #fff;
+}
+.breadcrumb {
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+    opacity: 0.85;
+}
+.breadcrumb a { color: #7dd3fc; text-decoration: none; }
+.breadcrumb a:hover { text-decoration: underline; }
+.card-list { list-style: none; padding: 0; margin: 0; }
+.card-list li { margin-bottom: 0.5rem; }
+.card-list a {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: #e8e8e8;
+    text-decoration: none;
+    font-size: 1rem;
+    transition: background 0.2s, border-color 0.2s;
+}
+.card-list a:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(125, 211, 252, 0.4);
+}
+.card-list a::before {
+    content: "";
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%237dd3fc'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+.card-list.files a::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/%3E%3C/svg%3E");
+}
+.card-list li.file-row {
+    position: relative;
+    list-style: none;
+}
+.card-list li.file-row > a { padding-right: 5rem; }
+.row-actions {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+}
+.delete-form {
+    margin: 0;
+    display: inline-flex;
+}
+.card-list li.file-row > .delete-form {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+}
+.pin-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #e8e8e8;
+    cursor: pointer;
+    font-size: 1.25rem;
+    line-height: 1;
+    transition: background 0.2s, color 0.2s;
+}
+.pin-menu-btn:hover { background: rgba(125, 211, 252, 0.25); color: #7dd3fc; }
+.delete-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #e8e8e8;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+.delete-btn:hover { background: rgba(239, 68, 68, 0.4); color: #fca5a5; }
+.delete-btn svg { width: 1.1rem; height: 1.1rem; }
+.empty { opacity: 0.8; font-size: 1rem; }
+.lock-icon { font-size: 0.9em; opacity: 0.9; margin-right: 0.25rem; }
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+}
+.modal-overlay.is-open { display: flex; }
+.modal-card {
+    background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 1.5rem;
+    max-width: 360px;
+    width: 100%;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
+.modal-card h2 {
+    margin: 0 0 1rem 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #fff;
+}
+.modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    margin-top: 1.25rem;
+}
+.modal-actions-top {
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+    justify-content: flex-start;
+}
+.modal-btn {
+    padding: 0.5rem 1.25rem;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.modal-btn-cancel {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e8e8e8;
+    border-color: rgba(255, 255, 255, 0.15);
+}
+.modal-btn-cancel:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.modal-btn-delete {
+    background: rgba(239, 68, 68, 0.25);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.5);
+}
+.modal-btn-delete:hover { background: rgba(239, 68, 68, 0.4); color: #fecaca; }
+.modal-btn-primary { background: #7dd3fc; color: #1a1a2e; }
+.modal-btn-primary:hover { background: #38bdf8; color: #0f172a; }
+.pin-modal-input {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    color: #e8e8e8;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+}
+.pin-modal-input:focus { outline: none; border-color: #7dd3fc; }
+.pin-modal-error { color: #fca5a5; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.site-nav {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 0.75rem 0;
+    margin-top: 1.25rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+.site-nav a {
+    color: #e8e8e8;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1rem;
+    padding: 0.4rem 0;
+}
+.site-nav a:hover { color: #7dd3fc; }
+.site-nav a.active { color: #7dd3fc; }
+.site-nav a { display: inline-flex; align-items: center; gap: 0.4rem; }
+.site-nav .nav-icon { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
+.site-nav .nav-logo { height: 2rem; width: auto; display: block; margin-right: 0.5rem; }

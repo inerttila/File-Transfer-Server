@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{{ favicon_url }}" type="image/gif">
+    <title>Upload new File</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
+</head>
+<body data-uploader-folder="{{ uploader_folder }}">
+    <div class="home-wrap">
+        {{ nav_html|safe }}
+        <p class="home-info"><strong>PIN-protected uploads are encrypted.</strong> Files in folders with a PIN are encrypted with cryptography; even an admin cannot access them. Don't lose your PIN.</p>
+        <div class="main">
+            <form method="post" enctype="multipart/form-data">
+                <input id="k-upload" class="files" type="file" name="file" multiple>
+                <div id="upload-dropzone" class="upload-dropzone" tabindex="0" role="button" aria-label="Select files or drag and drop files">
+                    <span class="dropzone-icon" aria-hidden="true">&#9729;</span>
+                    <div class="dropzone-title">Drag &amp; Drop to Upload File</div>
+                    <div class="dropzone-or">Click to select files</div>
+                </div>
+                <p id="selected-count" class="selected-count"></p>
+                <button type="button" id="upload-action-btn" class="upload-action-btn" disabled>Upload</button>
+            </form>
+            <div class="selected-files-wrap"><ul id="is"></ul></div>
+        </div>
+    </div>
+    <div id="body">
+        <div class="loading-gif-wrap">
+            <div class="label"><span id="progress-label">Uploading...</span><span id="progress-pct">0%</span></div>
+            <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
+        </div>
+        <div class="spinner"></div>
+    </div>
+    <div id="home-encrypt-modal" class="home-encrypt-modal" aria-hidden="true">
+        <div class="home-encrypt-card">
+            <h2>Do you want your folder encrypted?</h2>
+            <p>Your files will be encrypted with a PIN. Only you (or anyone with the PIN) can open the folder. Don't lose your PIN.</p>
+            <div class="home-modal-actions">
+                <button type="button" class="home-modal-btn home-modal-btn-secondary" id="home-encrypt-no">No</button>
+                <button type="button" class="home-modal-btn home-modal-btn-primary" id="home-encrypt-yes">Yes</button>
+            </div>
+        </div>
+    </div>
+    <div id="home-pin-modal" class="home-pin-modal" aria-hidden="true">
+        <div class="home-pin-card">
+            <h2>Enter your PIN for the folder</h2>
+            <p>Choose a PIN (at least 4 characters). Your uploads will be encrypted.</p>
+            <p id="home-pin-error" class="home-pin-error" style="display: none;"></p>
+            <input type="password" id="home-pin-input" placeholder="PIN" minlength="4" autocomplete="off">
+            <input type="password" id="home-pin-confirm" placeholder="Confirm PIN" minlength="4" autocomplete="off">
+            <div class="home-modal-actions">
+                <button type="button" class="home-modal-btn home-modal-btn-secondary" id="home-pin-cancel">Cancel</button>
+                <button type="button" class="home-modal-btn home-modal-btn-primary" id="home-pin-set">Set PIN &amp; Upload</button>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/home.js') }}"></script>
+</body>
+</html>

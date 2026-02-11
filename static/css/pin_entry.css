@@ -1,0 +1,49 @@
+* { box-sizing: border-box; }
+body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+    background: linear-gradient(145deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #e8e8e8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+.pin-wrap {
+    max-width: 320px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+.pin-wrap h1 { margin: 0 0 1rem 0; font-size: 1.15rem; color: #fff; }
+.pin-wrap p { margin: 0 0 1rem 0; opacity: 0.9; font-size: 0.95rem; }
+.pin-error { color: #fca5a5; margin-bottom: 0.75rem !important; }
+.pin-wrap input[type="password"] {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    color: #e8e8e8;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+}
+.pin-wrap input:focus { outline: none; border-color: #7dd3fc; }
+.pin-wrap button {
+    width: 100%;
+    padding: 0.75rem;
+    border-radius: 10px;
+    border: none;
+    background: #7dd3fc;
+    color: #1a1a2e;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+}
+.pin-wrap button:hover { background: #38bdf8; }
+.pin-wrap a { color: #7dd3fc; text-decoration: none; font-size: 0.9rem; }
+.pin-wrap a:hover { text-decoration: underline; }
