@@ -19,6 +19,7 @@ dependencies = [
 
 [project.scripts]
 fts = "cli:main"
+inert = "cli:main"
 
 [tool.setuptools]
 include-package-data = true
