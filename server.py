@@ -39,7 +39,16 @@ def get_client_ip():
 
 
 UPLOAD_FOLDER = get_or_create_folder("uploads")
-app = Flask(__name__)
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_TEMPLATE_DIR = os.path.join(_BASE_DIR, "templates")
+_STATIC_DIR = os.path.join(_BASE_DIR, "static")
+# When installed via pip as flat modules, templates/static are installed under sys.prefix.
+if not os.path.isdir(_TEMPLATE_DIR):
+    _TEMPLATE_DIR = os.path.join(sys.prefix, "templates")
+if not os.path.isdir(_STATIC_DIR):
+    _STATIC_DIR = os.path.join(sys.prefix, "static")
+
+app = Flask(__name__, template_folder=_TEMPLATE_DIR, static_folder=_STATIC_DIR)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-in-production")
 sock = Sock(app)

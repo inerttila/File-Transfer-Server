@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "file-transfer-server-itila"   # unique name on PyPI
+version = "0.1.0"
+description = "File transfer server with PIN and encryption"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "Flask",
+  "flask-sock",
+  "cryptography",
+  "itsdangerous",
+  "Werkzeug",
+  "waitress"
+]
+
+[project.scripts]
+fts = "cli:main"
+
+[tool.setuptools]
+include-package-data = true
+py-modules = [
+  "cli",
+  "server",
+  "upload_routes",
+  "pin_routes",
+  "pin_service",
+  "encrypt_service",
+  "decrypt_service",
+  "ui_pages"
+]
+
+[tool.setuptools.data-files]
+"templates" = ["templates/*.html"]
+"static/css" = ["static/css/*.css"]
+"static/js" = ["static/js/*.js"]
