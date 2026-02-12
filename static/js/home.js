@@ -33,8 +33,29 @@ function transit() {
     var listEl = document.getElementById("is");
     var selectedCount = document.getElementById("selected-count");
     var selectedFiles = [];
+    var previewObjectUrls = [];
+
+    function clearPreviewUrls() {
+        previewObjectUrls.forEach(function (url) {
+            try { URL.revokeObjectURL(url); } catch (e) {}
+        });
+        previewObjectUrls = [];
+    }
+
+    function formatSize(bytes) {
+        if (!bytes || bytes < 1024) {
+            return (bytes || 0) + " B";
+        }
+        var kb = bytes / 1024;
+        if (kb < 1024) {
+            return kb.toFixed(1) + " KB";
+        }
+        var mb = kb / 1024;
+        return mb.toFixed(1) + " MB";
+    }
 
     function renderSelectedFiles() {
+        clearPreviewUrls();
         if (listEl) {
             listEl.innerHTML = "";
         }
@@ -54,9 +75,58 @@ function transit() {
             uploadBtn.removeAttribute("disabled");
         }
         if (listEl) {
-            selectedFiles.forEach(function (file) {
+            selectedFiles.forEach(function (file, index) {
                 var li = document.createElement("li");
-                li.innerText = file.name;
+                var main = document.createElement("div");
+                main.className = "selected-file-main";
+
+                var thumb;
+                if (file.type && file.type.indexOf("image/") === 0) {
+                    thumb = document.createElement("img");
+                    thumb.className = "selected-file-thumb";
+                    var objectUrl = URL.createObjectURL(file);
+                    previewObjectUrls.push(objectUrl);
+                    thumb.src = objectUrl;
+                    thumb.alt = file.name;
+                } else {
+                    thumb = document.createElement("div");
+                    thumb.className = "selected-file-thumb selected-file-thumb-generic";
+                    var ext = "";
+                    var dotIdx = file.name.lastIndexOf(".");
+                    if (dotIdx > -1 && dotIdx < file.name.length - 1) {
+                        ext = file.name.slice(dotIdx + 1).slice(0, 4).toUpperCase();
+                    }
+                    thumb.textContent = ext || "FILE";
+                }
+
+                var meta = document.createElement("div");
+                meta.className = "selected-file-meta";
+
+                var nameSpan = document.createElement("span");
+                nameSpan.className = "selected-file-name";
+                nameSpan.innerText = file.name;
+
+                var sizeSpan = document.createElement("span");
+                sizeSpan.className = "selected-file-size";
+                sizeSpan.innerText = formatSize(file.size || 0);
+
+                meta.appendChild(nameSpan);
+                meta.appendChild(sizeSpan);
+                main.appendChild(thumb);
+                main.appendChild(meta);
+
+                var removeBtn = document.createElement("button");
+                removeBtn.type = "button";
+                removeBtn.className = "selected-file-remove-btn";
+                removeBtn.innerText = "x";
+                removeBtn.setAttribute("aria-label", "Remove " + file.name);
+                removeBtn.addEventListener("click", function () {
+                    selectedFiles.splice(index, 1);
+                    renderSelectedFiles();
+                });
+
+                li.appendChild(main);
+                li.appendChild(removeBtn);
                 listEl.appendChild(li);
             });
         }
@@ -64,6 +134,9 @@ function transit() {
 
     function setSelectedFiles(fileList) {
         selectedFiles = Array.prototype.slice.call(fileList || []);
+        if (fileInput) {
+            fileInput.value = "";
+        }
         renderSelectedFiles();
     }
 

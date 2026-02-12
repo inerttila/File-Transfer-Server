@@ -159,8 +159,8 @@ input[type="submit"] { display: none; }
     gap: 0.75rem;
 }
 .upload-dropzone {
-    width: 100%;
-    min-height: 260px;
+    width: 93%;
+    min-height: 220px;
     border: 2px dashed rgba(125, 211, 252, 0.75);
     border-radius: 12px;
     background: linear-gradient(145deg, rgba(125, 211, 252, 0.22) 0%, rgba(56, 189, 248, 0.2) 100%);
@@ -228,10 +228,86 @@ input[type="submit"] { display: none; }
 }
 ul {
     margin: 0;
-    padding-left: 1.1rem;
+    padding-left: 0;
     color: #e8e8e8;
     font-size: clamp(0.75rem, 2vw, 1rem);
     text-align: left;
+    list-style: none;
+}
+#is {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+#is li:only-child {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: 100%;
+    max-width: calc(50% - 0.25rem);
+}
+ul li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 0.45rem 0.6rem;
+}
+.selected-file-main {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+    flex: 1;
+}
+.selected-file-thumb {
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 1px solid rgba(125, 211, 252, 0.45);
+    background: rgba(125, 211, 252, 0.08);
+}
+.selected-file-thumb-generic {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #7dd3fc;
+}
+.selected-file-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.selected-file-name {
+    display: block;
+    overflow-wrap: anywhere;
+    font-size: 0.95rem;
+}
+.selected-file-size {
+    font-size: 0.75rem;
+    opacity: 0.75;
+}
+.selected-file-remove-btn {
+    border: 0;
+    border-radius: 999px;
+    width: 1.5rem;
+    height: 1.5rem;
+    min-width: 1.5rem;
+    background: rgba(239, 68, 68, 0.2);
+    color: #fecaca;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+.selected-file-remove-btn:hover {
+    background: rgba(239, 68, 68, 0.4);
+    color: #fff;
 }
 .spinner {
     --t: 2500ms;
@@ -293,6 +369,8 @@ ul {
     #body .spinner { width: clamp(5rem, 22vw, 8rem); height: clamp(5rem, 22vw, 8rem); }
     .progress-wrap { max-width: 94vw; }
     .upload-dropzone { min-height: 220px; }
+    #is { grid-template-columns: 1fr; }
+    #is li:only-child { max-width: 100%; }
 }
 @media screen and (max-width: 380px) {
     body { padding: 0.5rem; }
