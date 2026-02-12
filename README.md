@@ -76,7 +76,7 @@ So: **data on disk is encrypted**; only someone who knows the PIN can decrypt. C
 - Python 3.x
 - See [requirements.txt](requirements.txt) (Flask, Werkzeug, flask-sock, **cryptography** for encryption).
 
-## author
+## Author
 Inert Tila
 - 🌐 [Website](https://inert.netlify.app)  
 - 🔗 [LinkedIn](https://al.linkedin.com/in/inerttila)
