@@ -80,3 +80,4 @@ So: **data on disk is encrypted**; only someone who knows the PIN can decrypt. C
 Inert Tila
 - 🌐 [Website](https://inert.netlify.app)  
 - 🔗 [LinkedIn](https://al.linkedin.com/in/inerttila)
+- 📦 [PyPI](https://pypi.org/project/inert-transfer/)
