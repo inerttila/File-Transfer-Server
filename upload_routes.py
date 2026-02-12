@@ -1,6 +1,7 @@
 import os
 import pathlib
 import shutil
+import mimetypes
 from io import BytesIO
 from urllib.parse import quote
 
@@ -111,6 +112,9 @@ def register_upload_routes(
         if file_path is None or not os.path.isfile(file_path):
             return "Not found", 404
 
+        preview_mode = request.args.get("preview") == "1"
+        guessed_mimetype = mimetypes.guess_type(os.path.basename(file_path))[0] or "application/octet-stream"
+
         if pin_service.folder_has_encryption(folder):
             fernet = pin_service.get_fek_for_folder(folder)
             if fernet:
@@ -119,13 +123,18 @@ def register_upload_routes(
                     plaintext = fernet.decrypt(ciphertext)
                     return send_file(
                         BytesIO(plaintext),
-                        as_attachment=True,
+                        as_attachment=not preview_mode,
                         download_name=os.path.basename(file_path),
-                        mimetype="application/octet-stream",
+                        mimetype=guessed_mimetype,
                     )
                 except Exception:
                     return "Decryption failed", 500
-        return send_file(file_path, as_attachment=True, download_name=os.path.basename(file_path))
+        return send_file(
+            file_path,
+            as_attachment=not preview_mode,
+            download_name=os.path.basename(file_path),
+            mimetype=guessed_mimetype,
+        )
 
     @app.route("/", methods=["GET", "POST"])
     def upload_file():

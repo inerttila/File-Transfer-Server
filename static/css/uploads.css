@@ -9,9 +9,15 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    overflow-y: auto;
 }
-.uploads-wrap { max-width: 640px; width: 100%; margin-top: -20rem; }
+.uploads-wrap {
+    max-width: 640px;
+    width: 100%;
+    margin-top: 0;
+    padding-bottom: 2rem;
+}
 h1 {
     font-size: 1.75rem;
     font-weight: 600;
@@ -27,7 +33,7 @@ h1 {
 .breadcrumb a:hover { text-decoration: underline; }
 .card-list { list-style: none; padding: 0; margin: 0; }
 .card-list li { margin-bottom: 0.5rem; }
-.card-list a {
+.card-list li > a {
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -40,18 +46,22 @@ h1 {
     font-size: 1rem;
     transition: background 0.2s, border-color 0.2s;
 }
-.card-list a:hover {
+.card-list li > a:hover {
     background: rgba(255, 255, 255, 0.12);
     border-color: rgba(125, 211, 252, 0.4);
 }
-.card-list a::before {
+.card-list li > a.is-preview-active {
+    background: rgba(125, 211, 252, 0.15);
+    border-color: rgba(125, 211, 252, 0.55);
+}
+.card-list li > a::before {
     content: "";
     width: 24px;
     height: 24px;
     flex-shrink: 0;
     background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%237dd3fc'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z'/%3E%3C/svg%3E") center/contain no-repeat;
 }
-.card-list.files a::before {
+.card-list.files li > a::before {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/%3E%3C/svg%3E");
 }
 .card-list li.file-row {
@@ -96,6 +106,29 @@ h1 {
     transition: background 0.2s, color 0.2s;
 }
 .pin-menu-btn:hover { background: rgba(125, 211, 252, 0.25); color: #7dd3fc; }
+.download-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #7dd3fc;
+    text-decoration: none;
+    cursor: pointer;
+    line-height: 0;
+    transition: background 0.2s, color 0.2s;
+}
+.download-btn:hover { background: rgba(125, 211, 252, 0.25); color: #bae6fd; }
+.download-btn svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    display: block;
+    margin: 0 auto;
+}
 .delete-btn {
     display: inline-flex;
     align-items: center;

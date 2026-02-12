@@ -69,16 +69,44 @@ def render_uploads_page(title, breadcrumb_html, items, list_class="card-list", n
             '0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 '
             '1v3M4 7h16"/></svg>'
         )
+        download_svg = (
+            '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" '
+            'stroke="currentColor" stroke-width="2"><path stroke-linecap="round" '
+            'stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4m5 8H3"/></svg>'
+        )
         list_items = []
+        is_file_list = "files" in list_class.split()
         for item in items:
-            li_class = ' class="file-row"' if (item.get("delete_url") or item.get("pin_menu")) else ""
+            li_class = ' class="file-row"' if (is_file_list or item.get("delete_url") or item.get("pin_menu")) else ""
             label_html = (
                 '<span class="lock-icon" title="Protected" aria-hidden="true">&#128274;</span> '
                 if item.get("has_pin")
                 else ""
             ) + item["label"]
-            link = f'<a href="{item["url"]}">{label_html}</a>'
-            if item.get("pin_menu"):
+            link_attrs = f'href="{item["url"]}"'
+            if is_file_list:
+                safe_label = item["label"].replace("&", "&amp;").replace('"', "&quot;")
+                link_attrs += (
+                    ' class="js-file-preview-trigger"'
+                    f' data-file-name="{safe_label}"'
+                    f' data-download-url="{item["url"]}"'
+                    f' data-preview-url="{item["url"]}?preview=1"'
+                )
+            link = f"<a {link_attrs}>{label_html}</a>"
+            if is_file_list:
+                link += '<span class="row-actions">'
+                link += (
+                    f'<a href="{item["url"]}" class="download-btn" aria-label="Download">{download_svg}</a>'
+                )
+                if item.get("delete_url"):
+                    msg = item.get("delete_message", "Delete?")
+                    link += (
+                        f'<form method="post" action="{item["delete_url"]}" class="delete-form js-delete-form" '
+                        f'data-confirm-message="{msg}"><button type="button" class="delete-btn '
+                        f'js-delete-trigger" aria-label="Delete">{bin_svg}</button></form>'
+                    )
+                link += "</span>"
+            elif item.get("pin_menu"):
                 folder_esc = (item.get("folder_name") or "").replace("&", "&amp;").replace('"', "&quot;")
                 has_pin = "true" if item.get("has_pin") else "false"
                 link += (
@@ -86,7 +114,7 @@ def render_uploads_page(title, breadcrumb_html, items, list_class="card-list", n
                     f'data-folder="{folder_esc}" data-has-pin="{has_pin}" '
                     'aria-label="Folder options">&#8230;</button>'
                 )
-            if item.get("delete_url"):
+            if item.get("delete_url") and not is_file_list:
                 msg = item.get("delete_message", "Delete?")
                 link += (
                     f'<form method="post" action="{item["delete_url"]}" class="delete-form js-delete-form" '
