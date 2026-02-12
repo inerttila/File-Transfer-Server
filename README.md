@@ -1,6 +1,17 @@
-# File Transfer Server
+# <img src="https://media2.giphy.com/media/QssGEmpkyEOhBCb7e1/giphy.gif?cid=ecf05e47a0n3gi1bfqntqmob8g9aid1oyj2wr3ds3mg700bl&rid=giphy.gif" alt="git admin" width="40" />    File Transfer Server
 
 Flask app for uploading and downloading files over the web. Optional **PIN protection** and **per-folder encryption** keep your files private.
+
+## Quick Commands
+
+```bash
+pip install inert-transfer
+inert  # starts the server on port 8069
+inert <port> # starts the server on the specified port
+inert status # shows the status of the server
+inert stop # stops the server
+inert -h # shows the help menu
+```
 
 ## Setup
 
@@ -64,3 +75,8 @@ So: **data on disk is encrypted**; only someone who knows the PIN can decrypt. C
 
 - Python 3.x
 - See [requirements.txt](requirements.txt) (Flask, Werkzeug, flask-sock, **cryptography** for encryption).
+
+## author
+Inert Tila
+- 🌐 [Website](https://inert.netlify.app)  
+- 🔗 [LinkedIn](https://al.linkedin.com/in/inerttila)

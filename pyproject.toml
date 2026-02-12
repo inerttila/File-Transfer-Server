@@ -3,11 +3,16 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "file-transfer-server-itila"   # unique name on PyPI
-version = "0.1.0"
+name = "inert-transfer"
+version = "0.1.3"
 description = "File transfer server with PIN and encryption"
 readme = "README.md"
 requires-python = ">=3.9"
+authors = [
+  { name = "Inert Tila" }
+]
+license = { text = "MIT" } 
+keywords = ["file-transfer", "flask", "encryption", "pin"]
 dependencies = [
   "Flask",
   "flask-sock",
@@ -16,6 +21,10 @@ dependencies = [
   "Werkzeug",
   "waitress"
 ]
+
+[project.urls]
+Homepage = "https://inert.netlify.app"
+Repository = "https://github.com/inerttila/File-Transfer-Server"
 
 [project.scripts]
 fts = "cli:main"

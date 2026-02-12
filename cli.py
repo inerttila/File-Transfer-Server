@@ -153,8 +153,6 @@ def stop_server(port=8069):
         _clear_pid_if_matches(pid)
     port_pids = _listening_pids(port)
     for listener_pid in port_pids:
-        if listener_pid == pid:
-            continue
         if _terminate_pid(listener_pid):
             print(f"Stopped process on port {port} (PID {listener_pid}).")
             stopped_any = True
@@ -187,6 +185,12 @@ def status_server(port=8069):
 
 
 def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
+    # Shortcut: `inert 9001` -> `inert start --port 9001`
+    if argv and len(argv) == 1 and str(argv[0]).isdigit():
+        argv = ["start", "--port", str(argv[0])]
+
     parser = argparse.ArgumentParser(description="File Transfer Server CLI")
     sub = parser.add_subparsers(dest="command")
 
