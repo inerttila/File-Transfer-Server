@@ -6,11 +6,12 @@ Flask app for uploading and downloading files over the web. Optional **PIN prote
 
 ```bash
 pip install inert-transfer
-inert  # starts the server on port 8069
-inert <port> # starts the server on the specified port
-inert status # shows the status of the server
-inert stop # stops the server
-inert -h # shows the help menu
+
+inert      # starts the server on port 8069
+inert <port>     # starts the server on the specified port
+inert status     # shows the status of the server
+inert stop     # stops the server
+inert -h     # shows the help menu
 ```
 
 ## Setup
