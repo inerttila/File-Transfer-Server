@@ -1,5 +1,6 @@
 import argparse
 import os
+import socket
 import signal
 import subprocess
 import sys
@@ -41,11 +42,27 @@ def _clear_pid_if_matches(pid):
 
 
 def _print_startup_info(host, port):
+    def _detect_lan_ip():
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                # No packets are sent; this asks OS for preferred outbound interface.
+                sock.connect(("8.8.8.8", 80))
+                ip = sock.getsockname()[0]
+            if ip and ip != "127.0.0.1":
+                return ip
+        except Exception:
+            pass
+        return None
+
     print("File Transfer Server starting...")
     print(f"Host: {host}")
     print(f"Port: {port}")
     if host == "0.0.0.0":
-        print(f"Local:  http://127.0.0.1:{port}")
+        lan_ip = _detect_lan_ip()
+        if lan_ip:
+            print(f"URL:    http://{lan_ip}:{port}")
+        else:
+            print(f"URL:    http://127.0.0.1:{port}")
     else:
         print(f"URL:    http://{host}:{port}")
     print("Press Ctrl+C to stop.")
