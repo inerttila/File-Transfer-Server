@@ -48,6 +48,20 @@
 })();
 
 (function () {
+    document.querySelectorAll(".file-table-row").forEach(function (row) {
+        row.addEventListener("click", function (ev) {
+            if (ev.target.closest(".row-actions-table, .delete-form, .download-btn, .delete-btn")) {
+                return;
+            }
+            var trigger = row.querySelector(".js-file-preview-trigger");
+            if (trigger) {
+                trigger.click();
+            }
+        });
+    });
+})();
+
+(function () {
     var pinModal = document.getElementById("pin-modal");
     var pinTitle = pinModal && pinModal.querySelector(".js-pin-title");
     var pinDesc = pinModal && pinModal.querySelector(".js-pin-desc");

@@ -64,6 +64,60 @@ h1 {
 .card-list.files li > a::before {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/%3E%3C/svg%3E");
 }
+.table-container { overflow-x: auto; }
+.uploads-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    overflow: hidden;
+}
+.uploads-table th,
+.uploads-table td {
+    padding: 0.75rem 0.8rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    text-align: left;
+    vertical-align: middle;
+}
+.uploads-table th {
+    color: #cbd5e1;
+    font-size: 0.86rem;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.04);
+}
+.uploads-table th a {
+    color: #7dd3fc;
+    text-decoration: none;
+}
+.uploads-table th a:hover { text-decoration: underline; }
+.uploads-table tr:last-child td { border-bottom: 0; }
+.uploads-table .file-name-cell a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: #e8e8e8;
+    text-decoration: none;
+}
+.uploads-table .file-name-cell a::before {
+    content: "";
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+.file-table-row { cursor: pointer; }
+.file-table-row:hover { background: rgba(125, 211, 252, 0.09); }
+.file-table-row .file-size-cell,
+.file-table-row .file-mtime-cell { white-space: nowrap; color: #cbd5e1; font-size: 0.9rem; }
+.file-actions-cell { width: 120px; }
+.row-actions-table {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    justify-content: flex-end;
+    width: 100%;
+}
 .card-list li.file-row {
     position: relative;
     list-style: none;

@@ -3,6 +3,7 @@
     var activeToken = 0;
     var activeTrigger = null;
     var previewRow = null;
+    var previewHostTag = null;
     var previewPanel = null;
     var previewTitle = null;
     var previewDownload = null;
@@ -12,12 +13,20 @@
         return;
     }
 
-    function ensurePreviewElements() {
-        if (previewRow) {
+    function ensurePreviewElements(hostRow) {
+        var hostTag = (hostRow && hostRow.tagName) || "LI";
+        if (previewRow && previewHostTag === hostTag) {
             return;
         }
-        previewRow = document.createElement("li");
+        previewRow = document.createElement(hostTag.toLowerCase());
+        previewHostTag = hostTag;
         previewRow.className = "file-preview-row";
+        if (hostTag === "TR") {
+            var td = document.createElement("td");
+            td.className = "file-preview-cell";
+            td.colSpan = Math.max(1, hostRow ? hostRow.children.length : 1);
+            previewRow.appendChild(td);
+        }
 
         previewPanel = document.createElement("section");
         previewPanel.className = "file-preview-panel";
@@ -42,7 +51,11 @@
         header.appendChild(previewDownload);
         previewPanel.appendChild(header);
         previewPanel.appendChild(previewContent);
-        previewRow.appendChild(previewPanel);
+        if (hostTag === "TR") {
+            previewRow.firstElementChild.appendChild(previewPanel);
+        } else {
+            previewRow.appendChild(previewPanel);
+        }
     }
 
     function setPreviewNode(node) {
@@ -92,11 +105,14 @@
     }
 
     function renderPreview(triggerEl) {
-        ensurePreviewElements();
+        var clickedRow = triggerEl.closest("[data-preview-row]") || triggerEl.closest("li");
+        if (!clickedRow) {
+            return;
+        }
+        ensurePreviewElements(clickedRow);
         var fileName = triggerEl.getAttribute("data-file-name") || "File";
         var downloadUrl = triggerEl.getAttribute("data-download-url") || triggerEl.getAttribute("href");
         var previewUrl = triggerEl.getAttribute("data-preview-url") || (downloadUrl + "?preview=1");
-        var clickedRow = triggerEl.closest("li");
         activeToken += 1;
         var token = activeToken;
 

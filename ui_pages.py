@@ -1,3 +1,4 @@
+import datetime
 from urllib.parse import quote
 
 from flask import render_template, url_for
@@ -58,7 +59,36 @@ NAV_HTML_UPLOADS_ACTIVE = (
 )
 
 
-def render_uploads_page(title, breadcrumb_html, items, list_class="card-list", nav_html=None):
+def _esc(text):
+    text = "" if text is None else str(text)
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _format_size(num_bytes):
+    size = int(num_bytes or 0)
+    if size < 1024:
+        return f"{size} B"
+    if size < 1024 * 1024:
+        return f"{size / 1024:.1f} KB"
+    if size < 1024 * 1024 * 1024:
+        return f"{size / (1024 * 1024):.1f} MB"
+    return f"{size / (1024 * 1024 * 1024):.1f} GB"
+
+
+def _toggle_sort_link(current_sort, key):
+    if current_sort == key:
+        return f"-{key}"
+    if current_sort == f"-{key}":
+        return key
+    return key if key == "name" else f"-{key}"
+
+
+def render_uploads_page(title, breadcrumb_html, items, list_class="card-list", nav_html=None, current_sort="-mtime"):
     if nav_html is None:
         nav_html = NAV_HTML_UPLOADS_ACTIVE
     if items:
@@ -75,17 +105,18 @@ def render_uploads_page(title, breadcrumb_html, items, list_class="card-list", n
             'stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4m5 8H3"/></svg>'
         )
         list_items = []
-        is_file_list = "files" in list_class.split()
+        is_file_table = list_class == "files-table"
+        is_file_list = "files" in list_class.split() or is_file_table
         for item in items:
             li_class = ' class="file-row"' if (is_file_list or item.get("delete_url") or item.get("pin_menu")) else ""
             label_html = (
                 '<span class="lock-icon" title="Protected" aria-hidden="true">&#128274;</span> '
                 if item.get("has_pin")
                 else ""
-            ) + item["label"]
+            ) + _esc(item["label"])
             link_attrs = f'href="{item["url"]}"'
             if is_file_list:
-                safe_label = item["label"].replace("&", "&amp;").replace('"', "&quot;")
+                safe_label = _esc(item["label"])
                 link_attrs += (
                     ' class="js-file-preview-trigger"'
                     f' data-file-name="{safe_label}"'
@@ -93,6 +124,33 @@ def render_uploads_page(title, breadcrumb_html, items, list_class="card-list", n
                     f' data-preview-url="{item["url"]}?preview=1"'
                 )
             link = f"<a {link_attrs}>{label_html}</a>"
+            if is_file_table:
+                mtime = int(item.get("mtime") or 0)
+                mtime_text = (
+                    datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+                    if mtime
+                    else "-"
+                )
+                actions = (
+                    f'<a href="{item["url"]}" class="download-btn" aria-label="Download">{download_svg}</a>'
+                )
+                if item.get("delete_url"):
+                    msg = item.get("delete_message", "Delete?")
+                    actions += (
+                        f'<form method="post" action="{item["delete_url"]}" class="delete-form js-delete-form" '
+                        f'data-confirm-message="{msg}"><button type="button" class="delete-btn '
+                        f'js-delete-trigger" aria-label="Delete">{bin_svg}</button></form>'
+                    )
+                row_html = (
+                    '<tr class="file-table-row" data-preview-row="1">'
+                    f'<td class="file-name-cell">{link}</td>'
+                    f'<td class="file-size-cell">{_format_size(item.get("size", 0))}</td>'
+                    f'<td class="file-mtime-cell">{mtime_text}</td>'
+                    f'<td class="file-actions-cell"><span class="row-actions-table">{actions}</span></td>'
+                    "</tr>"
+                )
+                list_items.append(row_html)
+                continue
             if is_file_list:
                 link += '<span class="row-actions">'
                 link += (
@@ -124,7 +182,25 @@ def render_uploads_page(title, breadcrumb_html, items, list_class="card-list", n
             if item.get("pin_menu"):
                 link += "</span>"
             list_items.append(f"<li{li_class}>{link}</li>")
-        body_html = f'<ul class="{list_class}">{"".join(list_items)}</ul>'
+        if is_file_table:
+            name_sort = _toggle_sort_link(current_sort, "name")
+            size_sort = _toggle_sort_link(current_sort, "size")
+            mtime_sort = _toggle_sort_link(current_sort, "mtime")
+            body_html = (
+                '<div class="table-container">'
+                '<table class="uploads-table">'
+                "<thead><tr>"
+                f'<th><a href="?sort={name_sort}">Name</a></th>'
+                f'<th><a href="?sort={size_sort}">Size</a></th>'
+                f'<th><a href="?sort={mtime_sort}">Last Modified</a></th>'
+                "<th>Actions</th>"
+                "</tr></thead>"
+                f'<tbody>{"".join(list_items)}</tbody>'
+                "</table>"
+                "</div>"
+            )
+        else:
+            body_html = f'<ul class="{list_class}">{"".join(list_items)}</ul>'
     else:
         body_html = '<p class="empty">No items here yet.</p>'
 

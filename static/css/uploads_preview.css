@@ -3,6 +3,10 @@
     margin-top: -0.2rem;
     margin-bottom: 0.7rem;
 }
+.file-preview-cell {
+    padding: 0.25rem 0.3rem 0.8rem 0.3rem;
+    border-bottom: 0 !important;
+}
 .file-preview-panel {
     margin-top: 0;
     background: rgba(255, 255, 255, 0.05);

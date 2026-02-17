@@ -94,16 +94,43 @@ def register_upload_routes(
             client_ip = get_client_ip().strip()
             can_delete = client_ip == folder or client_ip in ("127.0.0.1", "::1")
             files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
-            files.sort()
+            sort = request.args.get("sort", "-mtime")
+            if sort not in {"name", "-name", "size", "-size", "mtime", "-mtime"}:
+                sort = "-mtime"
             items = []
             for file_name in files:
-                item = {"url": f"/uploads/{folder}/{quote(file_name)}", "label": file_name}
+                file_abs = os.path.join(path, file_name)
+                try:
+                    stat = os.stat(file_abs)
+                    size = int(stat.st_size)
+                    mtime = int(stat.st_mtime)
+                except OSError:
+                    size = 0
+                    mtime = 0
+                item = {
+                    "url": f"/uploads/{folder}/{quote(file_name)}",
+                    "label": file_name,
+                    "size": size,
+                    "mtime": mtime,
+                }
                 if can_delete:
                     item["delete_url"] = f"/uploads/{folder}/{quote(file_name)}/delete"
                     item["delete_message"] = "Delete this file?"
                 items.append(item)
+            reverse = sort.startswith("-")
+            key = sort[1:] if reverse else sort
+            if key == "name":
+                items.sort(key=lambda i: (i["label"] or "").lower(), reverse=reverse)
+            else:
+                items.sort(key=lambda i: i.get(key, 0), reverse=reverse)
             breadcrumb = f'<a href="/">Home</a> / <a href="/uploads">Uploads</a> / {folder}'
-            return render_uploads_page(folder, breadcrumb, items, list_class="card-list files")
+            return render_uploads_page(
+                folder,
+                breadcrumb,
+                items,
+                list_class="files-table",
+                current_sort=sort,
+            )
 
         if pin_service.folder_has_pin(folder) and not pin_service.is_folder_unlocked(folder):
             return redirect(url_for("pin_entry", folder=folder, next=request.url))
