@@ -67,6 +67,7 @@ So: **data on disk is encrypted**; only someone who knows the PIN can decrypt. C
 ### Important notes
 
 - **Remove PIN / Change PIN** — You must **open the folder and enter the PIN** in that session first. Then you can remove or change the PIN from the ⋯ menu.
+- **Wrong PIN attempt limit** — After 9 wrong PIN attempts, a custom warning popup appears for the final attempt. If the 10th attempt is also wrong (and the user confirms), the folder is permanently deleted and its PIN details are removed from `uploads/.folder_pins.json`.
 - **Cross-PC / cache clear unlock** — After entering the correct PIN, downloads are decrypted and PIN change/remove work, even on another PC or after clearing browser cache.
 - **Folder delete cleanup** — Deleting a folder also removes that folder’s record from `uploads/.folder_pins.json`.
 - **Lost PIN** — If the PIN is forgotten, encrypted files **cannot be recovered** (by design).
