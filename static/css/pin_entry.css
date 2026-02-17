@@ -47,3 +47,59 @@ body {
 .pin-wrap button:hover { background: #38bdf8; }
 .pin-wrap a { color: #7dd3fc; text-decoration: none; font-size: 0.9rem; }
 .pin-wrap a:hover { text-decoration: underline; }
+
+.pin-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+}
+.pin-modal-overlay.is-open { display: flex; }
+.pin-modal-card {
+    max-width: 420px;
+    width: 100%;
+    background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    padding: 1.2rem;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+}
+.pin-modal-card h2 {
+    margin: 0 0 0.7rem 0;
+    font-size: 1.1rem;
+    color: #fff;
+}
+.pin-modal-card p {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    opacity: 0.95;
+}
+.pin-modal-actions {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+}
+.pin-modal-btn {
+    border: 1px solid transparent;
+    border-radius: 9px;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.pin-modal-btn-cancel {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #e8e8e8;
+}
+.pin-modal-btn-danger {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: rgba(239, 68, 68, 0.55);
+    color: #fecaca;
+}

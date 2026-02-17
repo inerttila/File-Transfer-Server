@@ -142,7 +142,13 @@ def render_folder_not_found_page():
     return render_template("folder_not_found.html", favicon_url=GIPHY_LOGO_URL)
 
 
-def render_pin_entry_page(folder_name, next_url, error=None, form_action=None):
+def render_pin_entry_page(
+    folder_name,
+    next_url,
+    error=None,
+    form_action=None,
+    show_final_attempt_popup=False,
+):
     if form_action is None:
         form_action = url_for("pin_entry", folder=folder_name)
     return render_template(
@@ -152,6 +158,7 @@ def render_pin_entry_page(folder_name, next_url, error=None, form_action=None):
         next_value=quote(next_url or ("/uploads/" + quote(folder_name))),
         error=error,
         form_action=form_action,
+        show_final_attempt_popup=show_final_attempt_popup,
     )
 
 

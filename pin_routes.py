@@ -1,7 +1,9 @@
 import os
 import pathlib
+import shutil
 
 from flask import redirect, request, url_for
+from ui_pages import GIPHY_LOGO_URL
 
 
 def register_pin_routes(app, pin_service, safe_upload_path, get_client_ip, render_pin_entry_page):
@@ -15,7 +17,11 @@ def register_pin_routes(app, pin_service, safe_upload_path, get_client_ip, rende
         if request.method == "POST":
             pin = (request.form.get("pin") or "").strip()
             next_url = request.form.get("next") or url_for("list_or_download_uploads", subpath=folder)
+            confirm_final = (request.form.get("confirm_final_attempt") or "").strip() == "1"
+            if confirm_final:
+                pin_service.confirm_final_attempt(folder)
             if pin_service.verify_folder_pin(folder, pin):
+                pin_service.clear_pin_failures(folder)
                 pin_service.unlock_folder_with_fek(folder, pin)
                 resp = redirect(next_url)
                 if pin_service.folder_has_encryption(folder):
@@ -24,7 +30,53 @@ def register_pin_routes(app, pin_service, safe_upload_path, get_client_ip, rende
                         token = pin_service.unlock_store_add(folder, fek_b64)
                         pin_service.set_unlock_cookie_on_response(resp, folder, token)
                 return resp
-            return render_pin_entry_page(folder, next_url, error="Wrong PIN. Try again."), 401
+            failures = pin_service.register_failed_pin_attempt(folder)
+            if failures == 9:
+                return (
+                    render_pin_entry_page(
+                        folder,
+                        next_url,
+                        error="Wrong PIN. 1 attempt left before folder deletion.",
+                        show_final_attempt_popup=True,
+                    ),
+                    401,
+                )
+            if failures >= 10:
+                if not pin_service.is_final_attempt_confirmed(folder):
+                    return (
+                        render_pin_entry_page(
+                            folder,
+                            next_url,
+                            error="Wrong PIN. Confirm the final attempt warning to continue.",
+                            show_final_attempt_popup=True,
+                        ),
+                        401,
+                    )
+                try:
+                    shutil.rmtree(path)
+                except OSError:
+                    return "Too many wrong attempts. Failed to delete folder.", 500
+                if not pin_service.remove_folder_details(folder):
+                    return "Folder deleted, but failed to remove PIN details.", 500
+                return (
+                    "<!doctype html><html><head>"
+                    '<meta charset="UTF-8">'
+                    '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+                    f'<link rel="icon" href="{GIPHY_LOGO_URL}" type="image/gif">'
+                    "<title>Folder Deleted - File Transfer Server</title>"
+                    '</head><body style="font-family:Segoe UI;'
+                    'background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;'
+                    'align-items:center;justify-content:center;margin:0;">'
+                    '<div style="text-align:center;background:rgba(255,255,255,0.06);'
+                    'border-radius:16px;padding:2.5rem 2.5rem 2rem 2.5rem;box-shadow:0 20px 50px rgba(0,0,0,0.3);">'
+                    '<h2 style="margin-top:0;margin-bottom:1.1rem;">Folder deleted</h2>'
+                    '<p style="margin:0 0 1.15rem 0;">Too many wrong PIN attempts. This folder has been removed.</p>'
+                    '<p style="margin:0;"><a href="/uploads" style="color:#7dd3fc;text-decoration:none;font-size:1rem;">Back to Uploads</a></p>'
+                    '</div></body></html>',
+                    410,
+                )
+            left = 10 - failures
+            return render_pin_entry_page(folder, next_url, error=f"Wrong PIN. {left} attempt(s) left."), 401
         next_url = request.args.get("next") or url_for("list_or_download_uploads", subpath=folder)
         return render_pin_entry_page(folder, next_url)
 

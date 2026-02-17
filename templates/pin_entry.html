@@ -16,10 +16,48 @@
         {% endif %}
         <form method="post" action="{{ form_action }}">
             <input type="hidden" name="next" value="{{ next_value }}">
+            <input type="hidden" name="confirm_final_attempt" id="confirm_final_attempt" value="0">
             <input type="password" name="pin" placeholder="PIN" autofocus minlength="4" required>
             <button type="submit">Unlock</button>
         </form>
         <p style="margin-top: 1rem;"><a href="/uploads">← Back to Uploads</a></p>
     </div>
+    {% if show_final_attempt_popup %}
+    <div id="final-attempt-modal" class="pin-modal-overlay is-open" aria-hidden="false">
+        <div class="pin-modal-card">
+            <h2>Final Attempt Warning</h2>
+            <p>
+                You have <strong>1 attempt left</strong>. If the next PIN is wrong, this folder will be deleted permanently.
+            </p>
+            <div class="pin-modal-actions">
+                <button type="button" class="pin-modal-btn pin-modal-btn-cancel" id="final-attempt-no">No</button>
+                <button type="button" class="pin-modal-btn pin-modal-btn-danger" id="final-attempt-yes">Yes, continue</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        (function () {
+            var modal = document.getElementById("final-attempt-modal");
+            var yesBtn = document.getElementById("final-attempt-yes");
+            var noBtn = document.getElementById("final-attempt-no");
+            var hidden = document.getElementById("confirm_final_attempt");
+            var pinInput = document.querySelector('input[name="pin"]');
+            if (!modal || !yesBtn || !noBtn || !hidden) {
+                return;
+            }
+            yesBtn.addEventListener("click", function () {
+                hidden.value = "1";
+                modal.classList.remove("is-open");
+                modal.setAttribute("aria-hidden", "true");
+                if (pinInput) {
+                    pinInput.focus();
+                }
+            });
+            noBtn.addEventListener("click", function () {
+                window.location.href = "/uploads";
+            });
+        })();
+    </script>
+    {% endif %}
 </body>
 </html>

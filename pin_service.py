@@ -27,6 +27,7 @@ class PinService:
         self.upload_folder = upload_folder
         self.secret_key = secret_key
         self._unlock_store = {}  # token -> {"folder": str, "fek": str, "expires": float}
+        self._pin_attempts = {}  # folder -> {"count": int, "final_confirmed": bool}
 
     def _unlock_serializer(self):
         return URLSafeTimedSerializer(self.secret_key, salt="ft-unlocks")
@@ -142,7 +143,30 @@ class PinService:
                 return False
         self._clear_session_fek(folder_name)
         self._unlock_store_revoke_folder(folder_name)
+        self.clear_pin_failures(folder_name)
         return True
+
+    def register_failed_pin_attempt(self, folder_name):
+        state = self._pin_attempts.get(folder_name) or {"count": 0, "final_confirmed": False}
+        state["count"] += 1
+        self._pin_attempts[folder_name] = state
+        return state["count"]
+
+    def get_failed_pin_attempts(self, folder_name):
+        state = self._pin_attempts.get(folder_name) or {"count": 0, "final_confirmed": False}
+        return int(state["count"])
+
+    def confirm_final_attempt(self, folder_name):
+        state = self._pin_attempts.get(folder_name) or {"count": 0, "final_confirmed": False}
+        state["final_confirmed"] = True
+        self._pin_attempts[folder_name] = state
+
+    def is_final_attempt_confirmed(self, folder_name):
+        state = self._pin_attempts.get(folder_name) or {"count": 0, "final_confirmed": False}
+        return bool(state["final_confirmed"])
+
+    def clear_pin_failures(self, folder_name):
+        self._pin_attempts.pop(folder_name, None)
 
     def _derive_kek(self, pin_clean, salt_b64):
         salt = base64.b64decode(salt_b64)
