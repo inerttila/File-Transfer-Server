@@ -2,6 +2,16 @@
 
 Flask app for uploading and downloading files over the web. Optional **PIN protection** and **per-folder encryption** keep your files private.
 
+<div align="center">
+  <img src="static/media/scr1.png" width="220" />
+  <img src="static/media/scr2.png" width="220" />
+</div>
+
+<div align="center" style="margin-top:10px;">
+  <img src="static/media/scr3.png" width="220" />
+  <img src="static/media/scr4.png" width="220" />
+</div>
+
 ## Quick Commands
 
 ```bash
@@ -24,16 +34,6 @@ python server.py
 Runs at **[http://0.0.0.0:8069](http://0.0.0.0:8069)** (port 8069, all interfaces). Use `python server.py 80` for port 80 or `python server.py <port>` for a custom port.
 
 Set `FLASK_SECRET_KEY` in the environment for production (needed for session/PIN unlock).
-
-<div align="center">
-  <img src="static/media/scr1.png" width="220" />
-  <img src="static/media/scr2.png" width="220" />
-</div>
-
-<div align="center" style="margin-top:10px;">
-  <img src="static/media/scr3.png" width="220" />
-  <img src="static/media/scr4.png" width="220" />
-</div>
 
 ## How it works
 
