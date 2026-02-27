@@ -28,13 +28,13 @@ Set `FLASK_SECRET_KEY` in the environment for production (needed for session/PIN
 <div style="
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-  max-width: 460px;
+  gap: 16px;
+  max-width: 440px;
 ">
-  <img src="static/media/scr1.png" style="width: 100%; height: auto;" />
-  <img src="static/media/scr2.png" style="width: 100%; height: auto;" />
-  <img src="static/media/scr3.png" style="width: 100%; height: auto;" />
-  <img src="static/media/scr4.png" style="width: 100%; height: auto;" />
+  <img src="static/media/scr1.png" width="200" height="130" />
+  <img src="static/media/scr2.png" width="200" height="130" />
+  <img src="static/media/scr3.png" width="200" height="130" />
+  <img src="static/media/scr4.png" width="200" height="130" />
 </div>
 
 ## How it works
