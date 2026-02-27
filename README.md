@@ -1,4 +1,4 @@
-# <img src="https://media2.giphy.com/media/QssGEmpkyEOhBCb7e1/giphy.gif?cid=ecf05e47a0n3gi1bfqntqmob8g9aid1oyj2wr3ds3mg700bl&rid=giphy.gif" alt="git admin" width="40" />    File Transfer Server
+# File Transfer Server
 
 Flask app for uploading and downloading files over the web. Optional **PIN protection** and **per-folder encryption** keep your files private.
 
@@ -21,9 +21,16 @@ pip install -r requirements.txt
 python server.py
 ```
 
-Runs at **http://0.0.0.0:8069** (port 8069, all interfaces). Use `python server.py 80` for port 80 or `python server.py <port>` for a custom port.
+Runs at **[http://0.0.0.0:8069](http://0.0.0.0:8069)** (port 8069, all interfaces). Use `python server.py 80` for port 80 or `python server.py <port>` for a custom port.
 
 Set `FLASK_SECRET_KEY` in the environment for production (needed for session/PIN unlock).
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; width: 460px;">
+  <img src="static/media/scr1.png" width="210" height="140" style="margin-bottom:20px;"/>
+  <img src="static/media/scr2.png" width="210" height="140" style="margin-bottom:20px;"/>
+  <img src="static/media/scr3.png" width="210" height="140"/>
+  <img src="static/media/scr4.png" width="210" height="140"/>
+</div>
 
 ## How it works
 
@@ -53,16 +60,28 @@ When you **set a PIN**, the server also turns on **per-folder encryption**:
 
 So: **data on disk is encrypted**; only someone who knows the PIN can decrypt. Changing the PIN re-encrypts files with a new key; removing the PIN decrypts all files and removes the PIN.
 
+Inside a `.folder_pins.json`
+
+```json
+{
+  "192.168.2.9": {
+    "hash": "pbkdf2:sha256:1000000$RwEyBZC3Fdl2JkDD$5b063b6cbcaa1f26b8825bafdbe978f1ae1d0177526597f52ee22a3e8235f737",
+    "salt": "/AFOGJENcr4VXstcR2aYNQ==",
+    "encrypted_fek": "Z0FBQUFBQnBvYkNROXJjblBvYVhRQUZReUVWUnk5ZjNfdGF2SlZCMTRLS2tVMXREMmxVbWRLT3hUVGlLcFRMT0ZVMHhvYXJPSHFIcE9DclVHZDNqdHFsZ2FGTFZMNTN3T3NHYThWX1J1SnJlSDBsdzI5ZS1EZnZtZDN0SVlNUkVpTkFFV19xQjJSNVU="
+  }
+}
+```
+
 ### Flow summary
 
-| Action        | What happens |
-|---------------|--------------|
-| **Set PIN**   | New FEK created, encrypted with KEK from PIN; all existing files encrypted with FEK; FEK stored in session. |
-| **Unlock**    | PIN checked → KEK derived → FEK decrypted → stored in session. |
-| **Upload**    | If folder is encrypted and session has FEK, file content is encrypted with FEK before saving. If encrypted but no FEK in session, you must open the folder and enter PIN first. |
-| **Download**  | If folder is encrypted, file is decrypted with FEK from session and sent. |
-| **Change PIN**| Current FEK from session used to decrypt all files; new FEK/KEK created; all files re-encrypted. (Open folder and enter current PIN first.) |
-| **Remove PIN**| FEK from session used to decrypt all files; PIN and encrypted FEK removed. (Open folder and enter PIN first.) |
+| Action         | What happens                                                                                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Set PIN**    | New FEK created, encrypted with KEK from PIN; all existing files encrypted with FEK; FEK stored in session.                                                                     |
+| **Unlock**     | PIN checked → KEK derived → FEK decrypted → stored in session.                                                                                                                  |
+| **Upload**     | If folder is encrypted and session has FEK, file content is encrypted with FEK before saving. If encrypted but no FEK in session, you must open the folder and enter PIN first. |
+| **Download**   | If folder is encrypted, file is decrypted with FEK from session and sent.                                                                                                       |
+| **Change PIN** | Current FEK from session used to decrypt all files; new FEK/KEK created; all files re-encrypted. (Open folder and enter current PIN first.)                                     |
+| **Remove PIN** | FEK from session used to decrypt all files; PIN and encrypted FEK removed. (Open folder and enter PIN first.)                                                                   |
 
 ### Important notes
 
@@ -79,7 +98,9 @@ So: **data on disk is encrypted**; only someone who knows the PIN can decrypt. C
 - See [requirements.txt](requirements.txt) (Flask, Werkzeug, flask-sock, **cryptography** for encryption).
 
 ## Author
+
 Inert Tila
-- 🌐 [Website](https://inert.netlify.app)  
+
+- 🌐 [Website](https://inert.netlify.app)
 - 🔗 [LinkedIn](https://al.linkedin.com/in/inerttila)
 - 📦 [PyPI](https://pypi.org/project/inert-transfer/)
