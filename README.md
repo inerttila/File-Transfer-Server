@@ -25,16 +25,14 @@ Runs at **[http://0.0.0.0:8069](http://0.0.0.0:8069)** (port 8069, all interface
 
 Set `FLASK_SECRET_KEY` in the environment for production (needed for session/PIN unlock).
 
-<div style="
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  max-width: 440px;
-">
-  <img src="static/media/scr1.png" width="200" height="130" />
-  <img src="static/media/scr2.png" width="200" height="130" />
-  <img src="static/media/scr3.png" width="200" height="130" />
-  <img src="static/media/scr4.png" width="200" height="130" />
+<div align="center">
+  <img src="static/media/scr1.png" width="220" />
+  <img src="static/media/scr2.png" width="220" />
+</div>
+
+<div align="center" style="margin-top:10px;">
+  <img src="static/media/scr3.png" width="220" />
+  <img src="static/media/scr4.png" width="220" />
 </div>
 
 ## How it works
