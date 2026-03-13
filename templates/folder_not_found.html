@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/folder_not_found.css') }}">
 </head>
 <body>
+    {{ nav_html|safe }}
     <div class="not-found-wrap">
         <h1>Folder not found</h1>
         <p>The folder does not exist. It may have been deleted.</p>

@@ -30,6 +30,12 @@ UPLOADS_ICON = (
     '00-2 2z"/></svg>'
 )
 
+GITHUB_LINK = (
+    '<a href="https://github.com/inerttila/" '
+    'class="nav-github-link" style="margin-left: 1.5rem; color: #999;" '
+    'target="_blank" rel="noopener noreferrer">GitHub</a>'
+)
+
 NAV_HTML = (
     '<nav class="site-nav">'
     + NAV_LOGO
@@ -37,7 +43,9 @@ NAV_HTML = (
     + HOME_ICON
     + 'Home</a><a href="/uploads">'
     + UPLOADS_ICON
-    + "Uploads</a></nav>"
+    + "Uploads</a>"
+    + GITHUB_LINK
+    + "</nav>"
 )
 NAV_HTML_HOME_ACTIVE = (
     '<nav class="site-nav">'
@@ -46,7 +54,9 @@ NAV_HTML_HOME_ACTIVE = (
     + HOME_ICON
     + 'Home</a><a href="/uploads">'
     + UPLOADS_ICON
-    + "Uploads</a></nav>"
+    + "Uploads</a>"
+    + GITHUB_LINK
+    + "</nav>"
 )
 NAV_HTML_UPLOADS_ACTIVE = (
     '<nav class="site-nav">'
@@ -55,7 +65,9 @@ NAV_HTML_UPLOADS_ACTIVE = (
     + HOME_ICON
     + 'Home</a><a href="/uploads" class="active">'
     + UPLOADS_ICON
-    + "Uploads</a></nav>"
+    + "Uploads</a>"
+    + GITHUB_LINK
+    + "</nav>"
 )
 
 
@@ -215,7 +227,11 @@ def render_uploads_page(title, breadcrumb_html, items, list_class="card-list", n
 
 
 def render_folder_not_found_page():
-    return render_template("folder_not_found.html", favicon_url=GIPHY_LOGO_URL)
+    return render_template(
+        "folder_not_found.html",
+        favicon_url=GIPHY_LOGO_URL,
+        nav_html=NAV_HTML,
+    )
 
 
 def render_pin_entry_page(
@@ -230,6 +246,7 @@ def render_pin_entry_page(
     return render_template(
         "pin_entry.html",
         favicon_url=GIPHY_LOGO_URL,
+        nav_html=nav_html,
         folder_name=quote(folder_name),
         next_value=quote(next_url or ("/uploads/" + quote(folder_name))),
         error=error,

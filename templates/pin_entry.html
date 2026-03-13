@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/pin_entry.css') }}">
 </head>
 <body>
+    {{ nav_html|safe }}
     <div class="pin-wrap">
         <h1>This folder is protected</h1>
         <p>Enter the PIN to open folder "{{ folder_name }}".</p>
