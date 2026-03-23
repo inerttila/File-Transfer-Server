@@ -1,14 +1,23 @@
 import argparse
+import json
 import os
 import socket
 import signal
 import subprocess
 import sys
 import time
+import urllib.request
 from pathlib import Path
+from importlib.metadata import PackageNotFoundError, version
+
+from packaging.version import InvalidVersion, Version
 
 
 PID_FILE = Path.home() / ".fts_server.pid"
+UPDATE_CACHE_FILE = Path.home() / ".inert_transfer_update_check.json"
+UPDATE_CHECK_INTERVAL_SECONDS = 60 * 60 * 24
+PACKAGE_NAME = "inert-transfer"
+PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
 
 
 def _read_pid():
@@ -39,6 +48,67 @@ def _clear_pid_if_matches(pid):
             PID_FILE.unlink(missing_ok=True)
         except Exception:
             pass
+
+
+def _load_update_cache():
+    try:
+        with UPDATE_CACHE_FILE.open("r", encoding="utf-8") as cache_file:
+            return json.load(cache_file)
+    except Exception:
+        return {}
+
+
+def _save_update_cache(cache_data):
+    try:
+        with UPDATE_CACHE_FILE.open("w", encoding="utf-8") as cache_file:
+            json.dump(cache_data, cache_file)
+    except Exception:
+        pass
+
+
+def _fetch_latest_version():
+    try:
+        with urllib.request.urlopen(PYPI_URL, timeout=2.5) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        return data.get("info", {}).get("version")
+    except Exception:
+        return None
+
+
+def check_for_update():
+    if os.getenv("INERT_TRANSFER_DISABLE_UPDATE_CHECK") == "1":
+        return None
+
+    try:
+        current_version = version(PACKAGE_NAME)
+    except PackageNotFoundError:
+        return None
+
+    now = int(time.time())
+    cache = _load_update_cache()
+    latest_version = cache.get("latest_version")
+    last_check = int(cache.get("last_check", 0))
+
+    if now - last_check >= UPDATE_CHECK_INTERVAL_SECONDS:
+        fetched = _fetch_latest_version()
+        if fetched:
+            latest_version = fetched
+        _save_update_cache({"last_check": now, "latest_version": latest_version})
+
+    if not latest_version:
+        return None
+
+    try:
+        if Version(latest_version) > Version(current_version):
+            return (
+                f"A new version of {PACKAGE_NAME} is available: "
+                f"{current_version} -> {latest_version}\n"
+                f"Upgrade with: python -m pip install --upgrade {PACKAGE_NAME}"
+            )
+    except InvalidVersion:
+        return None
+
+    return None
 
 
 def _print_startup_info(host, port):
@@ -207,6 +277,10 @@ def main(argv=None):
     # Shortcut: `inert 9001` -> `inert start --port 9001`
     if argv and len(argv) == 1 and str(argv[0]).isdigit():
         argv = ["start", "--port", str(argv[0])]
+
+    update_message = check_for_update()
+    if update_message:
+        print(update_message)
 
     parser = argparse.ArgumentParser(description="File Transfer Server CLI")
     sub = parser.add_subparsers(dest="command")
