@@ -6,6 +6,7 @@
     <link rel="icon" href="{{ favicon_url }}" type="image/gif">
     <title>Enter PIN - {{ folder_name }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/pin_entry.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/nav_onetime_used.css') }}">
 </head>
 <body>
     {{ nav_html|safe }}
@@ -60,5 +61,6 @@
         })();
     </script>
     {% endif %}
+    <script src="{{ url_for('static', filename='js/nav_onetime_state.js') }}"></script>
 </body>
 </html>

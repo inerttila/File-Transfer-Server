@@ -1,0 +1,92 @@
+.onetime-wrap {
+    margin-top: 0;
+}
+
+.onetime-info {
+    margin-bottom: 1.25rem;
+}
+
+.onetime-form {
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.onetime-result {
+    margin-top: 1.75rem;
+    width: 100%;
+    max-width: 520px;
+    text-align: left;
+}
+
+.onetime-result-label {
+    margin: 0 0 0.5rem;
+    font-weight: 600;
+    color: #e8e8e8;
+    font-size: clamp(0.9rem, 2.2vw, 1rem);
+}
+
+.onetime-link-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.onetime-link-input {
+    flex: 1 1 12rem;
+    min-width: 0;
+    padding: 0.65rem 0.75rem;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.25);
+    color: #e8e8e8;
+    font-size: clamp(0.8rem, 2vw, 0.95rem);
+}
+
+.onetime-copy-btn {
+    padding: 0.65rem 1rem;
+    border-radius: 10px;
+    border: 1px solid rgba(125, 211, 252, 0.45);
+    background: rgba(125, 211, 252, 0.15);
+    color: #7dd3fc;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: clamp(0.85rem, 2vw, 0.95rem);
+}
+
+.onetime-copy-btn:hover {
+    background: rgba(125, 211, 252, 0.28);
+}
+
+.onetime-copy-status {
+    min-height: 1.25rem;
+    margin: 0.5rem 0 0;
+    font-size: 0.875rem;
+    color: rgba(232, 232, 232, 0.85);
+}
+
+.onetime-invalid-msg {
+    max-width: 480px;
+    margin: 1rem auto;
+    padding: 1rem 1.25rem;
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.35);
+    border-radius: 12px;
+    color: #fecaca;
+    line-height: 1.45;
+}
+
+.onetime-back-link {
+    color: #7dd3fc;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.onetime-back-link:hover {
+    text-decoration: underline;
+}

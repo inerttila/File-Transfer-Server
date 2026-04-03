@@ -1,5 +1,7 @@
 __pycache__/
 uploads/
+onetime/
+.onetime_registry.json
 dist/
 inert_transfer.egg-info/
 build/

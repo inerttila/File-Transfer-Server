@@ -7,6 +7,7 @@
     <title>{{ title }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/uploads.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/uploads_preview.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/nav_onetime_used.css') }}">
 </head>
 <body>
     <div class="uploads-wrap">
@@ -52,6 +53,7 @@
             </div>
         </div>
     </div>
+    <script src="{{ url_for('static', filename='js/nav_onetime_state.js') }}"></script>
     <script src="{{ url_for('static', filename='js/uploads.js') }}"></script>
     <script src="{{ url_for('static', filename='js/uploads_preview.js') }}"></script>
 </body>

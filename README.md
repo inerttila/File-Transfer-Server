@@ -1,6 +1,6 @@
 # File Transfer Server
 
-Flask app for uploading and downloading files over the web. Optional **PIN protection** and **per-folder encryption** keep your files private.
+Flask app for uploading and downloading files over the web. Optional **PIN protection**, **per-folder encryption**, and **one-time links (OTL)** help keep your files private or shared safely.
 
 <div align="center">
   <img src="static/media/scr1.png" width="220" />
@@ -41,6 +41,22 @@ Set `FLASK_SECRET_KEY` in the environment for production (needed for session/PIN
 - **Uploads (`/uploads`)** — List folders (one per client IP). Open a folder to list files; click a file to download.
 - Files are stored under `uploads/<client_ip>/`. Client IP is taken from the request (or from `X-Forwarded-For` / `X-Real-IP` when behind a proxy).
 - **WebSocket** — Echo endpoint at `/websocket`.
+
+## OTL (one-time link)
+
+In the nav, **OTL** opens the one-time share page (`/one-time-link`). You pick **one** file and click **Done**; the server returns a **single-use** download link.
+
+- The **first** person who opens the link downloads the file.
+- After that, the link no longer works and the file is **removed** from the server.
+
+Pending OTL files and metadata are **not** stored inside `uploads/`:
+
+| Location                                                    | Purpose                            |
+| ----------------------------------------------------------- | ---------------------------------- |
+| `onetime/` (next to your `uploads/` folder)                 | File waiting to be downloaded once |
+| `.onetime_registry.json` (same parent folder as `uploads/`) | Token metadata for active links    |
+
+If you previously used an older build that kept data under `uploads/onetime/`, the server moves it to `onetime/` when possible.
 
 ## Folder PIN protection
 

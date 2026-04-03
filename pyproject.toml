@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "inert-transfer"
-version = "0.2.1"
+version = "0.2.2"
 description = "File transfer server with PIN and encryption"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -37,6 +37,7 @@ py-modules = [
   "cli",
   "server",
   "upload_routes",
+  "onetime_routes",
   "pin_routes",
   "pin_service",
   "encrypt_service",

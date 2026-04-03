@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{{ favicon_url }}" type="image/gif">
+    <title>One-time share</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/onetime_share.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/nav_onetime_used.css') }}">
+</head>
+<body>
+    <div class="home-wrap onetime-wrap">
+        {{ nav_html|safe }}
+        <p class="home-info onetime-info">
+            <strong>One-time link.</strong> Choose a file, click Done, and share the link. The first person to open it downloads the file; after that the link stops working and the file is removed from the server.
+        </p>
+        <div class="main">
+            <div class="onetime-form">
+                <input id="onetime-file" class="files" type="file" name="file">
+                <div id="onetime-dropzone" class="upload-dropzone" tabindex="0" role="button" aria-label="Select a file or drag and drop">
+                    <span class="dropzone-icon" aria-hidden="true">&#9729;</span>
+                    <div class="dropzone-title">Choose a file to share once</div>
+                    <div class="dropzone-or">Click or drag a file here</div>
+                </div>
+                <p id="onetime-selected" class="selected-count"></p>
+                <button type="button" id="onetime-done-btn" class="upload-action-btn" disabled>Done</button>
+            </div>
+            <div id="onetime-result" class="onetime-result" hidden>
+                <p class="onetime-result-label">Share this link (single use):</p>
+                <div class="onetime-link-row">
+                    <input type="text" id="onetime-link-input" class="onetime-link-input" readonly aria-label="Download link">
+                    <button type="button" id="onetime-copy-btn" class="onetime-copy-btn">Copy</button>
+                </div>
+                <p id="onetime-copy-status" class="onetime-copy-status" aria-live="polite"></p>
+            </div>
+        </div>
+    </div>
+    <div id="body">
+        <div class="loading-gif-wrap">
+            <div class="label"><span id="progress-label">Uploading...</span><span id="progress-pct">0%</span></div>
+            <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
+        </div>
+        <div class="spinner"></div>
+    </div>
+    <script src="{{ url_for('static', filename='js/nav_onetime_state.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/onetime_share.js') }}"></script>
+</body>
+</html>

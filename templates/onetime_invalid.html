@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="{{ favicon_url }}" type="image/gif" />
+    <title>Link unavailable</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/home.css') }}"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/onetime_share.css') }}"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/nav_onetime_used.css') }}"
+    />
+  </head>
+  <body>
+    <div class="home-wrap onetime-wrap">
+      {{ nav_html|safe }}
+      <div class="main">
+        <p class="onetime-invalid-msg">
+          This link is no longer valid. It may have already been used, or it
+          never existed.
+        </p>
+        <p>
+          <a href="/one-time-link" class="onetime-back-link"
+            >Create a new one-time share</a
+          >
+        </p>
+      </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/nav_onetime_state.js') }}"></script>
+  </body>
+</html>

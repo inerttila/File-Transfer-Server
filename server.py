@@ -6,9 +6,12 @@ from flask_sock import Sock
 
 from pin_routes import register_pin_routes
 from pin_service import PinService
+from onetime_routes import register_onetime_routes
 from ui_pages import (
     render_folder_not_found_page,
     render_home_page,
+    render_onetime_invalid_page,
+    render_onetime_share_page,
     render_pin_entry_page,
     render_uploads_page,
 )
@@ -50,6 +53,11 @@ if not os.path.isdir(_STATIC_DIR):
 
 app = Flask(__name__, template_folder=_TEMPLATE_DIR, static_folder=_STATIC_DIR)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+# One-time share data lives next to uploads/, not inside uploads/
+_upload_abs = os.path.abspath(app.config["UPLOAD_FOLDER"])
+_data_parent = os.path.dirname(_upload_abs)
+app.config["ONETIME_FILES_FOLDER"] = os.path.join(_data_parent, "onetime")
+app.config["ONETIME_REGISTRY_PATH"] = os.path.join(_data_parent, ".onetime_registry.json")
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-in-production")
 sock = Sock(app)
 
@@ -78,6 +86,12 @@ register_upload_routes(
     render_uploads_page=render_uploads_page,
     render_folder_not_found_page=render_folder_not_found_page,
     render_home_page=render_home_page,
+)
+
+register_onetime_routes(
+    app=app,
+    render_onetime_share_page=render_onetime_share_page,
+    render_onetime_invalid_page=render_onetime_invalid_page,
 )
 
 

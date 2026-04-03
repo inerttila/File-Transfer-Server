@@ -30,6 +30,15 @@ UPLOADS_ICON = (
     '00-2 2z"/></svg>'
 )
 
+ONE_TIME_LINK = (
+    '<a href="/one-time-link" class="nav-onetime-link" '
+    'style="margin-left: 1.5rem; color: #999;">OTL</a>'
+)
+ONE_TIME_LINK_ACTIVE = (
+    '<a href="/one-time-link" class="nav-onetime-link active" '
+    'style="margin-left: 1.5rem; color: #7dd3fc;">OTL</a>'
+)
+
 GITHUB_LINK = (
     '<a href="https://github.com/inerttila/" '
     'class="nav-github-link" style="margin-left: 1.5rem; color: #999;" '
@@ -44,6 +53,7 @@ NAV_HTML = (
     + 'Home</a><a href="/uploads">'
     + UPLOADS_ICON
     + "Uploads</a>"
+    + ONE_TIME_LINK
     + GITHUB_LINK
     + "</nav>"
 )
@@ -55,6 +65,7 @@ NAV_HTML_HOME_ACTIVE = (
     + 'Home</a><a href="/uploads">'
     + UPLOADS_ICON
     + "Uploads</a>"
+    + ONE_TIME_LINK
     + GITHUB_LINK
     + "</nav>"
 )
@@ -66,6 +77,19 @@ NAV_HTML_UPLOADS_ACTIVE = (
     + 'Home</a><a href="/uploads" class="active">'
     + UPLOADS_ICON
     + "Uploads</a>"
+    + ONE_TIME_LINK
+    + GITHUB_LINK
+    + "</nav>"
+)
+NAV_HTML_ONETIME_ACTIVE = (
+    '<nav class="site-nav">'
+    + NAV_LOGO
+    + '<a href="/">'
+    + HOME_ICON
+    + 'Home</a><a href="/uploads">'
+    + UPLOADS_ICON
+    + "Uploads</a>"
+    + ONE_TIME_LINK_ACTIVE
     + GITHUB_LINK
     + "</nav>"
 )
@@ -246,7 +270,7 @@ def render_pin_entry_page(
     return render_template(
         "pin_entry.html",
         favicon_url=GIPHY_LOGO_URL,
-        nav_html=nav_html,
+        nav_html=NAV_HTML,
         folder_name=quote(folder_name),
         next_value=quote(next_url or ("/uploads/" + quote(folder_name))),
         error=error,
@@ -261,4 +285,20 @@ def render_home_page(uploader_ip):
         favicon_url=GIPHY_LOGO_URL,
         nav_html=NAV_HTML_HOME_ACTIVE,
         uploader_folder=uploader_ip,
+    )
+
+
+def render_onetime_share_page():
+    return render_template(
+        "onetime_share.html",
+        favicon_url=GIPHY_LOGO_URL,
+        nav_html=NAV_HTML_ONETIME_ACTIVE,
+    )
+
+
+def render_onetime_invalid_page():
+    return render_template(
+        "onetime_invalid.html",
+        favicon_url=GIPHY_LOGO_URL,
+        nav_html=NAV_HTML,
     )

@@ -6,6 +6,7 @@
     <link rel="icon" href="{{ favicon_url }}" type="image/gif">
     <title>Folder not found</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/folder_not_found.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/nav_onetime_used.css') }}">
 </head>
 <body>
     {{ nav_html|safe }}
@@ -14,5 +15,6 @@
         <p>The folder does not exist. It may have been deleted.</p>
         <a href="/uploads">Go back</a>
     </div>
+    <script src="{{ url_for('static', filename='js/nav_onetime_state.js') }}"></script>
 </body>
 </html>

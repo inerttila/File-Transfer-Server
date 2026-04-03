@@ -1,0 +1,6 @@
+/* After user completes one-time share (session), link stays muted (no hover highlight) but remains clickable. */
+.site-nav a.nav-onetime-link.nav-onetime-used,
+.site-nav a.nav-onetime-link.nav-onetime-used:hover {
+    color: #999 !important;
+    cursor: pointer;
+}
