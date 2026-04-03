@@ -56,8 +56,6 @@ Pending OTL files and metadata are **not** stored inside `uploads/`:
 | `onetime/` (next to your `uploads/` folder)                 | File waiting to be downloaded once |
 | `.onetime_registry.json` (same parent folder as `uploads/`) | Token metadata for active links    |
 
-If you previously used an older build that kept data under `uploads/onetime/`, the server moves it to `onetime/` when possible.
-
 ## Folder PIN protection
 
 Folders are **public by default**. You can protect your own folder (the one matching your IP) with a PIN.
