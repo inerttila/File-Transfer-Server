@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "inert-transfer"
-version = "0.2.2"
+version = "0.2.3"
 description = "File transfer server with PIN and encryption"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -28,22 +28,13 @@ Homepage = "https://inert.netlify.app"
 Repository = "https://github.com/inerttila/File-Transfer-Server"
 
 [project.scripts]
-fts = "cli:main"
-inert = "cli:main"
+fts = "inert_transfer.cli:main"
+inert = "inert_transfer.cli:main"
 
 [tool.setuptools]
 include-package-data = true
-py-modules = [
-  "cli",
-  "server",
-  "upload_routes",
-  "onetime_routes",
-  "pin_routes",
-  "pin_service",
-  "encrypt_service",
-  "decrypt_service",
-  "ui_pages"
-]
+py-modules = ["server"]
+packages = ["inert_transfer"]
 
 [tool.setuptools.data-files]
 "templates" = ["templates/*.html"]

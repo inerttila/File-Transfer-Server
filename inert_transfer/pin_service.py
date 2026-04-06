@@ -12,8 +12,8 @@ from flask import request, session
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from decrypt_service import decrypt_existing_files, decrypt_fek
-from encrypt_service import encrypt_existing_files, encrypt_fek
+from .decrypt_service import decrypt_existing_files, decrypt_fek
+from .encrypt_service import encrypt_existing_files, encrypt_fek
 
 
 class PinService:

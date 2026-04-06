@@ -4,10 +4,10 @@ import sys
 from flask import Flask, request
 from flask_sock import Sock
 
-from pin_routes import register_pin_routes
-from pin_service import PinService
-from onetime_routes import register_onetime_routes
-from ui_pages import (
+from inert_transfer.onetime_routes import register_onetime_routes
+from inert_transfer.pin_routes import register_pin_routes
+from inert_transfer.pin_service import PinService
+from inert_transfer.ui_pages import (
     render_folder_not_found_page,
     render_home_page,
     render_onetime_invalid_page,
@@ -15,7 +15,7 @@ from ui_pages import (
     render_pin_entry_page,
     render_uploads_page,
 )
-from upload_routes import register_upload_routes
+from inert_transfer.upload_routes import register_upload_routes
 
 
 # Windows: prevent Werkzeug from using socket.fromfd (not supported on Windows).

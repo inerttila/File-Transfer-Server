@@ -3,7 +3,7 @@ import pathlib
 import shutil
 
 from flask import redirect, request, url_for
-from ui_pages import GIPHY_LOGO_URL
+from .ui_pages import GIPHY_LOGO_URL
 
 
 def register_pin_routes(app, pin_service, safe_upload_path, get_client_ip, render_pin_entry_page):
