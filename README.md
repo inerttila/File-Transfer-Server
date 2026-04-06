@@ -2,15 +2,9 @@
 
 Flask app for uploading and downloading files over the web. Optional **PIN protection**, **per-folder encryption**, and **one-time links (OTL)** help keep your files private or shared safely.
 
-<div align="center">
-  <img src="static/media/scr1.png" width="220" />
-  <img src="static/media/scr2.png" width="220" />
-</div>
-
-<div align="center" style="margin-top:10px;">
-  <img src="static/media/scr3.png" width="220" />
-  <img src="static/media/scr4.png" width="220" />
-</div>
+<p align="center">
+  <img src="static/media/image.png" width="320" />
+</p>
 
 ## Quick Commands
 
