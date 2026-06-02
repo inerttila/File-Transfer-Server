@@ -111,6 +111,96 @@ def check_for_update():
     return None
 
 
+_STARTUP_BANNER = r""" 
+ _____  ____  _        ___      ______  ____    ____  ____   _____ _____  ___  ____
+|     ||    || |      /  _]    |      ||    \  /    ||    \ / ___/|     |/  _]|    \
+|   __| |  | | |     /  [_     |      ||  D  )|  o  ||  _  (   \_ |   __/  [_ |  D  )
+|  |_   |  | | |___ |    _]    |_|  |_||    / |     ||  |  |\__  ||  |_|    _]|    /
+|   _]  |  | |     ||   [_       |  |  |    \ |  _  ||  |  |/  \ ||   _]   [_ |    \
+|  |    |  | |     ||     |      |  |  |  .  \|  |  ||  |  |\    ||  | |     ||  .  \
+|__|   |____||_____||_____|      |__|  |__|\_||__|__||__|__| \___||__| |_____||__|\_|
+"""
+
+
+def _enable_windows_ansi():
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(-11)
+        mode = ctypes.c_ulong()
+        if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+    except Exception:
+        pass
+
+
+def _prepare_terminal_output():
+    _enable_windows_ansi()
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+
+def _box_chars():
+    rounded = ("╭", "╮", "╰", "╯", "│", "├", "┤", "─")
+    encoding = sys.stdout.encoding or "utf-8"
+    try:
+        for char in rounded:
+            char.encode(encoding)
+        return rounded
+    except (UnicodeEncodeError, LookupError):
+        return ("+", "+", "+", "+", "|", "+", "+", "-")
+
+
+def _tty_style(text, *codes):
+    if not sys.stdout.isatty() or not codes:
+        return text
+    return f"\033[{';'.join(codes)}m{text}\033[0m"
+
+
+def _print_server_status(host, port, url):
+    _prepare_terminal_output()
+    tl, tr, bl, br, side, mid_l, mid_r, bar = _box_chars()
+    title = "> Server listening"
+    rows = [("Host", str(host)), ("Port", str(port)), ("URL", url)]
+    label_w = max(len(label) for label, _ in rows)
+    plain_lines = [f" {title}"] + [
+        f"  {label.ljust(label_w)}  |  {value}" for label, value in rows
+    ]
+    inner_w = max(len(line) for line in plain_lines)
+    border = bar * inner_w
+    edge = _tty_style(side, "96")
+
+    def _box_line(plain_content, colorize=None):
+        pad = inner_w - len(plain_content)
+        if colorize and sys.stdout.isatty():
+            content = colorize(plain_content) + (" " * pad)
+        else:
+            content = plain_content + (" " * pad)
+        print(edge + content + edge)
+
+    print(_tty_style(f"{tl}{border}{tr}", "96"))
+    _box_line(f" {title}", lambda text: _tty_style(text, "1", "96"))
+    print(_tty_style(f"{mid_l}{border}{mid_r}", "2"))
+    for label, value in rows:
+        plain = f"  {label.ljust(label_w)}  |  {value}"
+        prefix = f"  {label.ljust(label_w)}  |  "
+
+        def _colorize_row(_text, lbl=label, val=value, pfx=prefix):
+            value_style = ("1", "92") if lbl == "URL" else ("97",)
+            return _tty_style(pfx, "2") + _tty_style(val, *value_style)
+
+        _box_line(plain, _colorize_row)
+    print(_tty_style(f"{bl}{border}{br}", "96"))
+    print()
+    print(_tty_style("  >> Press Ctrl+C to stop", "2", "33"))
+
+
 def _print_startup_info(host, port):
     def _detect_lan_ip():
         try:
@@ -124,18 +214,14 @@ def _print_startup_info(host, port):
             pass
         return None
 
-    print("File Transfer Server starting...")
-    print(f"Host: {host}")
-    print(f"Port: {port}")
+    print(_STARTUP_BANNER)
+    print()
     if host == "0.0.0.0":
         lan_ip = _detect_lan_ip()
-        if lan_ip:
-            print(f"URL:    http://{lan_ip}:{port}")
-        else:
-            print(f"URL:    http://127.0.0.1:{port}")
+        url = f"http://{lan_ip}:{port}" if lan_ip else f"http://127.0.0.1:{port}"
     else:
-        print(f"URL:    http://{host}:{port}")
-    print("Press Ctrl+C to stop.")
+        url = f"http://{host}:{port}"
+    _print_server_status(host, port, url)
 
 
 def _listening_pids(port):
