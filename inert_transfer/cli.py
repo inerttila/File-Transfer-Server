@@ -1,10 +1,13 @@
 import argparse
 import json
 import os
+import re
+import shutil
 import socket
 import signal
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -111,17 +114,6 @@ def check_for_update():
     return None
 
 
-_STARTUP_BANNER = r""" 
- _____  ____  _        ___      ______  ____    ____  ____   _____ _____  ___  ____
-|     ||    || |      /  _]    |      ||    \  /    ||    \ / ___/|     |/  _]|    \
-|   __| |  | | |     /  [_     |      ||  D  )|  o  ||  _  (   \_ |   __/  [_ |  D  )
-|  |_   |  | | |___ |    _]    |_|  |_||    / |     ||  |  |\__  ||  |_|    _]|    /
-|   _]  |  | |     ||   [_       |  |  |    \ |  _  ||  |  |/  \ ||   _]   [_ |    \
-|  |    |  | |     ||     |      |  |  |  .  \|  |  ||  |  |\    ||  | |     ||  .  \
-|__|   |____||_____||_____|      |__|  |__|\_||__|__||__|__| \___||__| |_____||__|\_|
-"""
-
-
 def _enable_windows_ansi():
     if os.name != "nt":
         return
@@ -163,8 +155,16 @@ def _tty_style(text, *codes):
     return f"\033[{';'.join(codes)}m{text}\033[0m"
 
 
-def _print_server_status(host, port, url):
-    _prepare_terminal_output()
+_ANSI_ESCAPE_RE = re.compile(r"\033\[[0-9;]*m")
+_STDOUT_ANIM_LOCK = threading.Lock()
+_STOP_HINT = "  >> Press Ctrl+C to stop"
+
+
+def _visible_len(text):
+    return len(_ANSI_ESCAPE_RE.sub("", text))
+
+
+def _build_server_status_lines(host, port, url):
     tl, tr, bl, br, side, mid_l, mid_r, bar = _box_chars()
     title = "> Server listening"
     rows = [("Host", str(host)), ("Port", str(port)), ("URL", url)]
@@ -175,18 +175,18 @@ def _print_server_status(host, port, url):
     inner_w = max(len(line) for line in plain_lines)
     border = bar * inner_w
     edge = _tty_style(side, "96")
+    lines = [_tty_style(f"{tl}{border}{tr}", "96")]
 
-    def _box_line(plain_content, colorize=None):
+    def _render_line(plain_content, colorize=None):
         pad = inner_w - len(plain_content)
         if colorize and sys.stdout.isatty():
             content = colorize(plain_content) + (" " * pad)
         else:
             content = plain_content + (" " * pad)
-        print(edge + content + edge)
+        return edge + content + edge
 
-    print(_tty_style(f"{tl}{border}{tr}", "96"))
-    _box_line(f" {title}", lambda text: _tty_style(text, "1", "96"))
-    print(_tty_style(f"{mid_l}{border}{mid_r}", "2"))
+    lines.append(_render_line(f" {title}", lambda text: _tty_style(text, "1", "96")))
+    lines.append(_tty_style(f"{mid_l}{border}{mid_r}", "2"))
     for label, value in rows:
         plain = f"  {label.ljust(label_w)}  |  {value}"
         prefix = f"  {label.ljust(label_w)}  |  "
@@ -195,10 +195,141 @@ def _print_server_status(host, port, url):
             value_style = ("1", "92") if lbl == "URL" else ("97",)
             return _tty_style(pfx, "2") + _tty_style(val, *value_style)
 
-        _box_line(plain, _colorize_row)
-    print(_tty_style(f"{bl}{border}{br}", "96"))
+        lines.append(_render_line(plain, _colorize_row))
+    lines.append(_tty_style(f"{bl}{border}{br}", "96"))
+    return lines
+
+
+def _print_server_status(host, port, url):
+    _prepare_terminal_output()
+    for line in _build_server_status_lines(host, port, url):
+        print(line)
     print()
-    print(_tty_style("  >> Press Ctrl+C to stop", "2", "33"))
+    print(_tty_style(_STOP_HINT, "2", "33"))
+
+
+class _NullScreensaver:
+    def stop(self):
+        pass
+
+
+class _StatusBoxScreensaver:
+    """DVD-style bouncing status box."""
+
+    def __init__(self, lines, min_row=0):
+        self._lines = lines
+        self._min_row = min_row
+        self._box_w = max(_visible_len(line) for line in lines)
+        self._box_h = len(lines)
+        self._stop = threading.Event()
+        self._thread = None
+        self._x = 0
+        self._y = min_row
+        self._vx = 1
+        self._vy = 1
+        self._has_frame = False
+
+    def start(self):
+        if not sys.stdout.isatty() or os.getenv("INERT_TRANSFER_NO_DVD") == "1":
+            return False
+        max_x, max_y, _, _ = self._bounds()
+        if max_x < 0 or max_y < self._min_row:
+            return False
+        _prepare_terminal_output()
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._run, name="inert-dvd-box", daemon=True)
+        self._thread.start()
+        return True
+
+    def stop(self):
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1.5)
+            self._thread = None
+        if self._has_frame:
+            self._paint_frame(self._x, self._y, None, None, erase_only=True)
+        with _STDOUT_ANIM_LOCK:
+            sys.stdout.write("\033[?25h")
+            sys.stdout.flush()
+
+    def _bounds(self):
+        size = shutil.get_terminal_size(fallback=(80, 24))
+        cols, rows = size.columns, size.lines
+        max_x = max(0, cols - self._box_w)
+        max_y = max(self._min_row, rows - self._box_h - 2)
+        return max_x, max_y, cols, rows
+
+    def _paint_frame(self, old_x, old_y, new_x, new_y, rows=None, *, erase_only=False):
+        """Update the terminal in one write to avoid erase/draw flicker."""
+        parts = []
+        blank = " " * self._box_w
+
+        moved = (
+            old_x is not None
+            and old_y is not None
+            and new_x is not None
+            and new_y is not None
+            and (old_x != new_x or old_y != new_y)
+        )
+        if old_x is not None and old_y is not None and (erase_only or moved):
+            for i in range(self._box_h):
+                parts.append(f"\033[{old_y + i + 1};{old_x + 1}H{blank}")
+
+        if not erase_only and new_x is not None and new_y is not None:
+            for i, line in enumerate(self._lines):
+                parts.append(f"\033[{new_y + i + 1};{new_x + 1}H{line}")
+
+        if not parts:
+            return
+
+        with _STDOUT_ANIM_LOCK:
+            # Synchronized output: apply erase+draw as one visible frame (Windows Terminal, etc.)
+            sys.stdout.write("\033[?2026h" + "".join(parts) + "\033[?2026l")
+            sys.stdout.flush()
+
+    def _draw_stop_hint(self, rows):
+        hint = _tty_style(_STOP_HINT, "2", "33")
+        with _STDOUT_ANIM_LOCK:
+            sys.stdout.write(f"\033[{rows};1H\033[2K{hint}")
+            sys.stdout.flush()
+
+    def _run(self):
+        tick = 0.07
+        with _STDOUT_ANIM_LOCK:
+            sys.stdout.write("\033[?25l")
+            sys.stdout.flush()
+
+        _, _, _cols, rows = self._bounds()
+        self._draw_stop_hint(rows)
+        self._paint_frame(None, None, self._x, self._y)
+        self._has_frame = True
+
+        while not self._stop.is_set():
+            max_x, max_y, _cols, rows = self._bounds()
+            if max_y < self._min_row:
+                self._stop.wait(tick)
+                continue
+
+            old_x, old_y = self._x, self._y
+
+            self._x += self._vx
+            self._y += self._vy
+            if self._x <= 0:
+                self._x = 0
+                self._vx = 1
+            elif self._x >= max_x:
+                self._x = max_x
+                self._vx = -1
+            if self._y <= self._min_row:
+                self._y = self._min_row
+                self._vy = 1
+            elif self._y >= max_y:
+                self._y = max_y
+                self._vy = -1
+
+            if old_x != self._x or old_y != self._y:
+                self._paint_frame(old_x, old_y, self._x, self._y)
+            self._stop.wait(tick)
 
 
 def _print_startup_info(host, port):
@@ -214,14 +345,23 @@ def _print_startup_info(host, port):
             pass
         return None
 
-    print(_STARTUP_BANNER)
-    print()
+    _prepare_terminal_output()
     if host == "0.0.0.0":
         lan_ip = _detect_lan_ip()
         url = f"http://{lan_ip}:{port}" if lan_ip else f"http://127.0.0.1:{port}"
     else:
         url = f"http://{host}:{port}"
-    _print_server_status(host, port, url)
+
+    lines = _build_server_status_lines(host, port, url)
+    screensaver = _StatusBoxScreensaver(lines, min_row=0)
+    if screensaver.start():
+        return screensaver
+
+    for line in lines:
+        print(line)
+    print()
+    print(_tty_style(_STOP_HINT, "2", "33"))
+    return _NullScreensaver()
 
 
 def _listening_pids(port):
@@ -288,7 +428,7 @@ def start_server(host, port):
         return 1
 
     _write_pid(os.getpid())
-    _print_startup_info(host, port)
+    screensaver = _print_startup_info(host, port)
     try:
         # Lazy imports keep `fts stop`/`fts status` working
         # even if runtime dependencies are not installed.
@@ -297,7 +437,8 @@ def start_server(host, port):
 
         serve(app, host=host, port=port)
     except KeyboardInterrupt:
-        print("\nServer stopped.")
+        with _STDOUT_ANIM_LOCK:
+            print("\nServer stopped.")
     except OSError as exc:
         print(f"Could not start server on {host}:{port}: {exc}")
         return 1
@@ -305,6 +446,7 @@ def start_server(host, port):
         print(f"Server stopped due to error: {exc}")
         return 1
     finally:
+        screensaver.stop()
         _clear_pid_if_matches(os.getpid())
     return 0
 
