@@ -13,6 +13,8 @@ pip install inert-transfer
 ```
 ```bash
 inert      # starts the server on port 8069
+```
+```bash
 inert <port>     # starts the server on the specified port
 inert status     # shows the status of the server
 inert stop     # stops the server
