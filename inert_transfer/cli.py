@@ -1,5 +1,6 @@
 import argparse
 import json
+import logging
 import os
 import re
 import shutil
@@ -415,6 +416,11 @@ def _terminate_pid(pid):
     return not _is_running(pid)
 
 
+def _configure_waitress():
+    """Waitress logs queue depth when parallel requests exceed free threads (e.g. page load)."""
+    logging.getLogger("waitress.queue").setLevel(logging.ERROR)
+
+
 def start_server(host, port):
     existing_pid = _read_pid()
     if _is_running(existing_pid):
@@ -435,7 +441,8 @@ def start_server(host, port):
         from waitress import serve
         from server import app
 
-        serve(app, host=host, port=port)
+        _configure_waitress()
+        serve(app, host=host, port=port, threads=8)
     except KeyboardInterrupt:
         with _STDOUT_ANIM_LOCK:
             print("\nServer stopped.")
