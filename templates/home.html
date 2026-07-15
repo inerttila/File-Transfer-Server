@@ -15,10 +15,18 @@
         <div class="main">
             <form method="post" enctype="multipart/form-data">
                 <input id="k-upload" class="files" type="file" name="file" multiple>
-                <div id="upload-dropzone" class="upload-dropzone" tabindex="0" role="button" aria-label="Select files or drag and drop files">
-                    <span class="dropzone-icon" aria-hidden="true">&#9729;</span>
-                    <div class="dropzone-title">Drag &amp; Drop to Upload File</div>
-                    <div class="dropzone-or">Click to select files</div>
+                <input id="k-upload-folder" class="files" type="file" name="file" multiple webkitdirectory directory>
+                <div class="upload-picker-row">
+                    <div id="upload-dropzone" class="upload-dropzone" tabindex="0" role="button" aria-label="Drag and drop files or archives">
+                        <span class="dropzone-icon" aria-hidden="true">&#9729;</span>
+                        <div class="dropzone-title">Drag &amp; Drop to Upload</div>
+                        <div class="dropzone-or">Drop files or .zip archives</div>
+                    </div>
+                    <div id="upload-folder-panel" class="upload-folder-panel" tabindex="0" role="button" aria-label="Select folder to upload">
+                        <span class="folder-panel-icon" aria-hidden="true">&#128193;</span>
+                        <div class="folder-panel-title">Select folder</div>
+                        <p class="folder-panel-hint">Click or drop a folder here. Folders are zipped in your browser, then saved as one archive.</p>
+                    </div>
                 </div>
                 <p id="selected-count" class="selected-count"></p>
                 <button type="button" id="upload-action-btn" class="upload-action-btn" disabled>Upload</button>
@@ -56,6 +64,8 @@
             </div>
         </div>
     </div>
+    <script src="{{ url_for('static', filename='js/vendor/fflate.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/folder_zip.js') }}"></script>
     <script src="{{ url_for('static', filename='js/nav_onetime_state.js') }}"></script>
     <script src="{{ url_for('static', filename='js/home.js') }}"></script>
 </body>

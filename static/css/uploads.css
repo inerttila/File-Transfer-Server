@@ -108,6 +108,9 @@ h1 {
 }
 .file-table-row { cursor: pointer; }
 .file-table-row:hover { background: rgba(125, 211, 252, 0.09); }
+.bundle-table-row .file-name-cell a::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23fbbf24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/%3E%3C/svg%3E");
+}
 .file-table-row .file-size-cell,
 .file-table-row .file-mtime-cell { white-space: nowrap; color: #cbd5e1; font-size: 0.9rem; }
 .file-actions-cell { width: 120px; }

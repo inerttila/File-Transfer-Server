@@ -1,4 +1,13 @@
-/* After user completes one-time share (session), link stays muted (no hover highlight) but remains clickable. */
+/* One-time link (OTL) nav accent — light red */
+.site-nav a.nav-onetime-link {
+    color: #fca5a5;
+}
+.site-nav a.nav-onetime-link:hover,
+.site-nav a.nav-onetime-link.active {
+    color: #f87171;
+}
+
+/* After user completes one-time share (session), link stays muted but remains clickable. */
 .site-nav a.nav-onetime-link.nav-onetime-used,
 .site-nav a.nav-onetime-link.nav-onetime-used:hover {
     color: #999 !important;

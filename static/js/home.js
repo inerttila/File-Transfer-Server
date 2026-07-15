@@ -28,12 +28,15 @@ function transit() {
     }
 
     var fileInput = document.getElementById("k-upload");
+    var folderInput = document.getElementById("k-upload-folder");
+    var folderPanel = document.getElementById("upload-folder-panel");
     var dropzone = document.getElementById("upload-dropzone");
     var uploadBtn = document.getElementById("upload-action-btn");
     var listEl = document.getElementById("is");
     var selectedCount = document.getElementById("selected-count");
     var selectedFiles = [];
     var previewObjectUrls = [];
+    var packingFolder = false;
 
     function clearPreviewUrls() {
         previewObjectUrls.forEach(function (url) {
@@ -69,10 +72,18 @@ function transit() {
             return;
         }
         if (selectedCount) {
-            selectedCount.textContent = selectedFiles.length + " file(s) selected";
+            if (packingFolder) {
+                selectedCount.textContent = selectedCount.getAttribute("data-packing-msg") || "Packing folder…";
+            } else {
+                selectedCount.textContent = selectedFiles.length + " file(s) selected";
+            }
         }
         if (uploadBtn) {
-            uploadBtn.removeAttribute("disabled");
+            if (packingFolder) {
+                uploadBtn.setAttribute("disabled", "disabled");
+            } else {
+                uploadBtn.removeAttribute("disabled");
+            }
         }
         if (listEl) {
             selectedFiles.forEach(function (file, index) {
@@ -104,7 +115,7 @@ function transit() {
 
                 var nameSpan = document.createElement("span");
                 nameSpan.className = "selected-file-name";
-                nameSpan.innerText = file.name;
+                nameSpan.innerText = uploadPathForFile(file);
 
                 var sizeSpan = document.createElement("span");
                 sizeSpan.className = "selected-file-size";
@@ -133,11 +144,68 @@ function transit() {
     }
 
     function setSelectedFiles(fileList) {
+        packingFolder = false;
         selectedFiles = Array.prototype.slice.call(fileList || []);
         if (fileInput) {
             fileInput.value = "";
         }
+        if (folderInput) {
+            folderInput.value = "";
+        }
         renderSelectedFiles();
+    }
+
+    function uploadPathForFile(file) {
+        return file.webkitRelativePath || file.name;
+    }
+
+    function setPackingStatus(message) {
+        packingFolder = true;
+        selectedFiles = [];
+        if (selectedCount) {
+            selectedCount.setAttribute("data-packing-msg", message);
+            selectedCount.textContent = message;
+        }
+        if (uploadBtn) {
+            uploadBtn.setAttribute("disabled", "disabled");
+        }
+        if (listEl) {
+            listEl.innerHTML = "";
+        }
+    }
+
+    function packFolderThenSelect(rawFiles) {
+        if (!window.FolderZip || !FolderZip.isFolderFileList(rawFiles)) {
+            setSelectedFiles(rawFiles);
+            return;
+        }
+        var folderName = FolderZip.folderDisplayName(rawFiles);
+        var total = rawFiles.length;
+        setPackingStatus("Packing \"" + folderName + "\" (0/" + total + ")…");
+        FolderZip.zipFolderFiles(rawFiles, function (done, tot) {
+            setPackingStatus("Packing \"" + folderName + "\" (" + done + "/" + tot + ")…");
+        })
+            .then(function (zipFile) {
+                packingFolder = false;
+                if (selectedCount) {
+                    selectedCount.removeAttribute("data-packing-msg");
+                }
+                setSelectedFiles([zipFile]);
+                if (selectedCount) {
+                    selectedCount.textContent =
+                        "Folder packed as " + zipFile.name + " (" + formatSize(zipFile.size) + ")";
+                }
+            })
+            .catch(function () {
+                packingFolder = false;
+                if (selectedCount) {
+                    selectedCount.removeAttribute("data-packing-msg");
+                    selectedCount.textContent = "Could not pack folder. Try again or upload a .zip file.";
+                }
+                if (uploadBtn) {
+                    uploadBtn.setAttribute("disabled", "disabled");
+                }
+            });
     }
 
     if (fileInput) {
@@ -145,9 +213,188 @@ function transit() {
             setSelectedFiles(fileInput.files);
         });
     }
+    if (folderInput) {
+        folderInput.addEventListener("change", function () {
+            var files = Array.prototype.slice.call(folderInput.files || []);
+            if (!files.length) {
+                return;
+            }
+            packFolderThenSelect(files);
+        });
+    }
+
+    function openFolderPicker(ev) {
+        if (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+        }
+        if (folderInput) {
+            folderInput.click();
+        }
+    }
+
+    if (folderPanel && folderInput) {
+        folderPanel.addEventListener("click", openFolderPicker);
+        folderPanel.addEventListener("keydown", function (ev) {
+            if (ev.key === "Enter" || ev.key === " ") {
+                openFolderPicker(ev);
+            }
+        });
+    }
+
+    function attachRelativePath(file, path) {
+        try {
+            Object.defineProperty(file, "webkitRelativePath", {
+                value: path,
+                configurable: true,
+            });
+        } catch (e) {
+            file.webkitRelativePath = path;
+        }
+    }
+
+    function readAllDirectoryEntries(reader) {
+        return new Promise(function (resolve, reject) {
+            var all = [];
+            function readBatch() {
+                reader.readEntries(function (entries) {
+                    if (!entries.length) {
+                        resolve(all);
+                        return;
+                    }
+                    all = all.concat(Array.prototype.slice.call(entries));
+                    readBatch();
+                }, reject);
+            }
+            readBatch();
+        });
+    }
+
+    function collectFilesFromEntry(entry, prefix) {
+        if (entry.isFile) {
+            return new Promise(function (resolve, reject) {
+                entry.file(function (file) {
+                    attachRelativePath(file, prefix + file.name);
+                    resolve([file]);
+                }, reject);
+            });
+        }
+        if (entry.isDirectory) {
+            var reader = entry.createReader();
+            var dirPrefix = prefix + entry.name + "/";
+            return readAllDirectoryEntries(reader).then(function (children) {
+                return Promise.all(children.map(function (child) {
+                    return collectFilesFromEntry(child, dirPrefix);
+                })).then(function (groups) {
+                    return [].concat.apply([], groups);
+                });
+            });
+        }
+        return Promise.resolve([]);
+    }
+
+    function collectFromDataTransfer(dataTransfer) {
+        return new Promise(function (resolve) {
+            if (!dataTransfer) {
+                resolve([]);
+                return;
+            }
+            if (
+                dataTransfer.items &&
+                dataTransfer.items.length &&
+                typeof dataTransfer.items[0].webkitGetAsEntry === "function"
+            ) {
+                var roots = [];
+                Array.prototype.forEach.call(dataTransfer.items, function (item) {
+                    var entry = item.webkitGetAsEntry();
+                    if (entry) {
+                        roots.push(entry);
+                    }
+                });
+                if (!roots.length) {
+                    resolve(Array.prototype.slice.call(dataTransfer.files || []));
+                    return;
+                }
+                Promise.all(roots.map(function (entry) {
+                    return collectFilesFromEntry(entry, "");
+                }))
+                    .then(function (groups) {
+                        var files = [].concat.apply([], groups);
+                        if (files.length) {
+                            resolve(files);
+                            return;
+                        }
+                        resolve(Array.prototype.slice.call(dataTransfer.files || []));
+                    })
+                    .catch(function () {
+                        resolve(Array.prototype.slice.call(dataTransfer.files || []));
+                    });
+                return;
+            }
+            resolve(Array.prototype.slice.call(dataTransfer.files || []));
+        });
+    }
+
+    function handleFileDrop(dataTransfer) {
+        collectFromDataTransfer(dataTransfer).then(function (files) {
+            if (!files.length) {
+                return;
+            }
+            if (window.FolderZip && FolderZip.isFolderFileList(files)) {
+                packFolderThenSelect(files);
+                return;
+            }
+            setSelectedFiles(files);
+        });
+    }
+
+    function handleFolderDrop(dataTransfer) {
+        collectFromDataTransfer(dataTransfer).then(function (files) {
+            if (!files.length) {
+                return;
+            }
+            if (!window.FolderZip || !FolderZip.isFolderFileList(files)) {
+                if (selectedCount) {
+                    selectedCount.textContent = "Drop a folder here, or click to browse.";
+                }
+                return;
+            }
+            packFolderThenSelect(files);
+        });
+    }
+
+    function bindDragTarget(el, onDrop) {
+        if (!el || !onDrop) {
+            return;
+        }
+        ["dragenter", "dragover"].forEach(function (evt) {
+            el.addEventListener(evt, function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                el.classList.add("drag-active");
+            });
+        });
+        el.addEventListener("dragleave", function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (ev.currentTarget === el) {
+                el.classList.remove("drag-active");
+            }
+        });
+        el.addEventListener("dragend", function () {
+            el.classList.remove("drag-active");
+        });
+        el.addEventListener("drop", function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            el.classList.remove("drag-active");
+            onDrop(ev.dataTransfer);
+        });
+    }
 
     if (dropzone && fileInput) {
         dropzone.addEventListener("click", function (ev) {
+            ev.stopPropagation();
             fileInput.click();
         });
         dropzone.addEventListener("keydown", function (ev) {
@@ -156,26 +403,11 @@ function transit() {
                 fileInput.click();
             }
         });
-        ["dragenter", "dragover"].forEach(function (evt) {
-            dropzone.addEventListener(evt, function (ev) {
-                ev.preventDefault();
-                ev.stopPropagation();
-                dropzone.classList.add("drag-active");
-            });
-        });
-        ["dragleave", "dragend", "drop"].forEach(function (evt) {
-            dropzone.addEventListener(evt, function (ev) {
-                ev.preventDefault();
-                ev.stopPropagation();
-                dropzone.classList.remove("drag-active");
-            });
-        });
-        dropzone.addEventListener("drop", function (ev) {
-            var files = ev.dataTransfer && ev.dataTransfer.files ? ev.dataTransfer.files : [];
-            if (files.length) {
-                setSelectedFiles(files);
-            }
-        });
+        bindDragTarget(dropzone, handleFileDrop);
+    }
+
+    if (folderPanel) {
+        bindDragTarget(folderPanel, handleFolderDrop);
     }
 
     var encryptModal = document.getElementById("home-encrypt-modal");
@@ -185,13 +417,13 @@ function transit() {
     var pinError = document.getElementById("home-pin-error");
 
     function doUpload() {
-        if (!selectedFiles.length) {
+        if (packingFolder || !selectedFiles.length) {
             return;
         }
         transit();
         var fd = new FormData();
         selectedFiles.forEach(function (file) {
-            fd.append("file", file);
+            fd.append("file", file, file.name);
         });
         var xhr = new XMLHttpRequest();
         var bar = document.getElementById("progress-bar");
@@ -373,7 +605,7 @@ function transit() {
     }
 
     function startUploadFlow() {
-        if (!selectedFiles.length) {
+        if (packingFolder || !selectedFiles.length) {
             return;
         }
         var hasFolderXhr = new XMLHttpRequest();

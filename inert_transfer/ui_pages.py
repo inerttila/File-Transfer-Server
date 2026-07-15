@@ -32,11 +32,11 @@ UPLOADS_ICON = (
 
 ONE_TIME_LINK = (
     '<a href="/one-time-link" class="nav-onetime-link" '
-    'style="margin-left: 1.5rem; color: #999;">OTL</a>'
+    'style="margin-left: 1.5rem;">OTL</a>'
 )
 ONE_TIME_LINK_ACTIVE = (
     '<a href="/one-time-link" class="nav-onetime-link active" '
-    'style="margin-left: 1.5rem; color: #7dd3fc;">OTL</a>'
+    'style="margin-left: 1.5rem;">OTL</a>'
 )
 
 GITHUB_LINK = (
@@ -151,7 +151,7 @@ def render_uploads_page(title, breadcrumb_html, items, list_class="card-list", n
                 else ""
             ) + _esc(item["label"])
             link_attrs = f'href="{item["url"]}"'
-            if is_file_list:
+            if is_file_list and not item.get("is_bundle"):
                 safe_label = _esc(item["label"])
                 link_attrs += (
                     ' class="js-file-preview-trigger"'
@@ -161,14 +161,18 @@ def render_uploads_page(title, breadcrumb_html, items, list_class="card-list", n
                 )
             link = f"<a {link_attrs}>{label_html}</a>"
             if is_file_table:
+                is_bundle = bool(item.get("is_bundle"))
                 mtime = int(item.get("mtime") or 0)
                 mtime_text = (
                     datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
                     if mtime
                     else "-"
                 )
+                dl_url = item.get("download_url") or item["url"]
+                if is_bundle:
+                    link = f'<a href="{dl_url}">{_esc(item["label"])}</a>'
                 actions = (
-                    f'<a href="{item["url"]}" class="download-btn" aria-label="Download">{download_svg}</a>'
+                    f'<a href="{dl_url}" class="download-btn" aria-label="Download">{download_svg}</a>'
                 )
                 if item.get("delete_url"):
                     msg = item.get("delete_message", "Delete?")
@@ -177,10 +181,13 @@ def render_uploads_page(title, breadcrumb_html, items, list_class="card-list", n
                         f'data-confirm-message="{msg}"><button type="button" class="delete-btn '
                         f'js-delete-trigger" aria-label="Delete">{bin_svg}</button></form>'
                     )
+                row_class = "file-table-row bundle-table-row" if is_bundle else "file-table-row"
+                preview_attr = "" if is_bundle else ' data-preview-row="1"'
+                size_text = _format_size(item.get("size", 0))
                 row_html = (
-                    '<tr class="file-table-row" data-preview-row="1">'
+                    f'<tr class="{row_class}"{preview_attr}>'
                     f'<td class="file-name-cell">{link}</td>'
-                    f'<td class="file-size-cell">{_format_size(item.get("size", 0))}</td>'
+                    f'<td class="file-size-cell">{size_text}</td>'
                     f'<td class="file-mtime-cell">{mtime_text}</td>'
                     f'<td class="file-actions-cell"><span class="row-actions-table">{actions}</span></td>'
                     "</tr>"
@@ -188,9 +195,10 @@ def render_uploads_page(title, breadcrumb_html, items, list_class="card-list", n
                 list_items.append(row_html)
                 continue
             if is_file_list:
+                dl_url = item.get("download_url") or item["url"]
                 link += '<span class="row-actions">'
                 link += (
-                    f'<a href="{item["url"]}" class="download-btn" aria-label="Download">{download_svg}</a>'
+                    f'<a href="{dl_url}" class="download-btn" aria-label="Download">{download_svg}</a>'
                 )
                 if item.get("delete_url"):
                     msg = item.get("delete_message", "Delete?")

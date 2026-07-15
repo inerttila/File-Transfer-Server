@@ -50,6 +50,15 @@
 (function () {
     document.querySelectorAll(".file-table-row").forEach(function (row) {
         row.addEventListener("click", function (ev) {
+            if (row.classList.contains("bundle-table-row")) {
+                if (!ev.target.closest(".row-actions-table, .delete-form, .delete-btn")) {
+                    var dl = row.querySelector(".download-btn");
+                    if (dl && dl.href) {
+                        window.location.href = dl.getAttribute("href");
+                    }
+                }
+                return;
+            }
             if (ev.target.closest(".row-actions-table, .delete-form, .download-btn, .delete-btn")) {
                 return;
             }

@@ -34,8 +34,8 @@ Set `FLASK_SECRET_KEY` in the environment for production (needed for session/PIN
 
 ## How it works
 
-- **Home (`/`)** — Upload: choose files, then click Upload. Progress bar shows while uploading.
-- **Uploads (`/uploads`)** — List folders (one per client IP). Open a folder to list files; click a file to download.
+- **Home (`/`)** — Upload files by drag-and-drop or click. Use **Select folder** (or drop a folder) to upload a whole directory: the browser zips it first, then it is saved as one archive under your IP folder.
+- **Uploads (`/uploads`)** — List folders (one per client IP). Open yours to see files and folder uploads (shown as `.zip`); download or delete as needed.
 - Files are stored under `uploads/<client_ip>/`. Client IP is taken from the request (or from `X-Forwarded-For` / `X-Real-IP` when behind a proxy).
 - **WebSocket** — Echo endpoint at `/websocket`.
 
