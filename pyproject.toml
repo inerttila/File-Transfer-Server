@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "inert-transfer"
-version = "0.2.8"
+version = "0.2.9"
 description = "File transfer server with PIN and encryption"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -40,3 +40,4 @@ packages = ["inert_transfer"]
 "templates" = ["templates/*.html"]
 "static/css" = ["static/css/*.css"]
 "static/js" = ["static/js/*.js"]
+"static/js/vendor" = ["static/js/vendor/*.js"]
