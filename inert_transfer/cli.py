@@ -333,36 +333,88 @@ class _StatusBoxScreensaver:
             self._stop.wait(tick)
 
 
-def _print_startup_info(host, port):
-    def _detect_lan_ip():
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-                # No packets are sent; this asks OS for preferred outbound interface.
-                sock.connect(("8.8.8.8", 80))
-                ip = sock.getsockname()[0]
-            if ip and ip != "127.0.0.1":
-                return ip
-        except Exception:
-            pass
-        return None
+def _detect_lan_ip():
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            # No packets are sent; this asks OS for preferred outbound interface.
+            sock.connect(("8.8.8.8", 80))
+            ip = sock.getsockname()[0]
+        if ip and ip != "127.0.0.1":
+            return ip
+    except Exception:
+        pass
+    return None
 
-    _prepare_terminal_output()
+
+def _server_url(host, port):
     if host == "0.0.0.0":
         lan_ip = _detect_lan_ip()
-        url = f"http://{lan_ip}:{port}" if lan_ip else f"http://127.0.0.1:{port}"
-    else:
-        url = f"http://{host}:{port}"
+        return f"http://{lan_ip}:{port}" if lan_ip else f"http://127.0.0.1:{port}"
+    return f"http://{host}:{port}"
 
+
+def _chrome_candidates():
+    if os.name == "nt":
+        local = os.environ.get("LOCALAPPDATA", "")
+        program_files = os.environ.get("PROGRAMFILES", r"C:\Program Files")
+        program_files_x86 = os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")
+        return [
+            os.path.join(local, r"Google\Chrome\Application\chrome.exe"),
+            os.path.join(program_files, r"Google\Chrome\Application\chrome.exe"),
+            os.path.join(program_files_x86, r"Google\Chrome\Application\chrome.exe"),
+            "chrome",
+        ]
+    if sys.platform == "darwin":
+        return ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "google-chrome"]
+    return ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"]
+
+
+def _open_in_chrome(url):
+    for candidate in _chrome_candidates():
+        if candidate != "chrome" and not (os.path.isfile(candidate) or shutil.which(candidate)):
+            continue
+        try:
+            subprocess.Popen(
+                [candidate, url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return True
+        except Exception:
+            continue
+    return False
+
+
+def _open_browser(url, delay=0.8):
+    """Open the app URL in Chrome (fallback: default browser) after the server is listening."""
+
+    def _run():
+        time.sleep(delay)
+        if _open_in_chrome(url):
+            return
+        try:
+            import webbrowser
+
+            webbrowser.open(url)
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, name="inert-open-browser", daemon=True).start()
+
+
+def _print_startup_info(host, port):
+    _prepare_terminal_output()
+    url = _server_url(host, port)
     lines = _build_server_status_lines(host, port, url)
     screensaver = _StatusBoxScreensaver(lines, min_row=0)
     if screensaver.start():
-        return screensaver
+        return screensaver, url
 
     for line in lines:
         print(line)
     print()
     print(_tty_style(_STOP_HINT, "2", "33"))
-    return _NullScreensaver()
+    return _NullScreensaver(), url
 
 
 def _listening_pids(port):
@@ -421,7 +473,7 @@ def _configure_waitress():
     logging.getLogger("waitress.queue").setLevel(logging.ERROR)
 
 
-def start_server(host, port):
+def start_server(host, port, open_browser=True):
     existing_pid = _read_pid()
     if _is_running(existing_pid):
         print(f"Server already running (PID {existing_pid}).")
@@ -434,7 +486,7 @@ def start_server(host, port):
         return 1
 
     _write_pid(os.getpid())
-    screensaver = _print_startup_info(host, port)
+    screensaver, url = _print_startup_info(host, port)
     try:
         # Lazy imports keep `fts stop`/`fts status` working
         # even if runtime dependencies are not installed.
@@ -442,6 +494,8 @@ def start_server(host, port):
         from server import app
 
         _configure_waitress()
+        if open_browser and os.getenv("INERT_TRANSFER_NO_BROWSER") != "1":
+            _open_browser(url)
         serve(app, host=host, port=port, threads=8)
     except KeyboardInterrupt:
         with _STDOUT_ANIM_LOCK:
@@ -523,6 +577,11 @@ def main(argv=None):
     start_parser = sub.add_parser("start", help="Start the server")
     start_parser.add_argument("--host", default="0.0.0.0", help="Host to bind (default: 0.0.0.0)")
     start_parser.add_argument("--port", type=int, default=8069, help="Port to bind (default: 8069)")
+    start_parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Do not open Chrome/browser automatically",
+    )
 
     stop_parser = sub.add_parser("stop", help="Stop the server started by fts")
     stop_parser.add_argument("--port", type=int, default=8069, help="Port to check/stop (default: 8069)")
@@ -536,7 +595,8 @@ def main(argv=None):
     if command == "start" or command is None:
         host = getattr(args, "host", "0.0.0.0")
         port = getattr(args, "port", 8069)
-        return start_server(host, port)
+        open_browser = not getattr(args, "no_browser", False)
+        return start_server(host, port, open_browser=open_browser)
     if command == "stop":
         return stop_server(getattr(args, "port", 8069))
     if command == "status":
