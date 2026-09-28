@@ -402,18 +402,21 @@ def _open_browser(url, delay=0.8):
     threading.Thread(target=_run, name="inert-open-browser", daemon=True).start()
 
 
-def _print_startup_info(host, port):
+def _print_startup_info(host, port, show_dvd=True):
     _prepare_terminal_output()
     url = _server_url(host, port)
     lines = _build_server_status_lines(host, port, url)
-    screensaver = _StatusBoxScreensaver(lines, min_row=0)
-    if screensaver.start():
-        return screensaver, url
+    if show_dvd:
+        screensaver = _StatusBoxScreensaver(lines, min_row=0)
+        if screensaver.start():
+            return screensaver, url
 
     for line in lines:
         print(line)
     print()
     print(_tty_style(_STOP_HINT, "2", "33"))
+    if not show_dvd:
+        print("Request log (no DVD):")
     return _NullScreensaver(), url
 
 
@@ -473,7 +476,31 @@ def _configure_waitress():
     logging.getLogger("waitress.queue").setLevel(logging.ERROR)
 
 
-def start_server(host, port, open_browser=True):
+def _attach_access_log(app):
+    """Print one line per request so failures stay visible when the DVD box is off."""
+    from flask import request
+
+    logger = logging.getLogger("inert.access")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    if not any(isinstance(handler, logging.StreamHandler) for handler in logger.handlers):
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s", "%H:%M:%S"))
+        logger.addHandler(handler)
+
+    @app.after_request
+    def _log_access(response):
+        logger.info(
+            "%s %s %s -> %s",
+            request.remote_addr or "-",
+            request.method,
+            request.path,
+            response.status_code,
+        )
+        return response
+
+
+def start_server(host, port, open_browser=True, show_dvd=True):
     existing_pid = _read_pid()
     if _is_running(existing_pid):
         print(f"Server already running (PID {existing_pid}).")
@@ -486,7 +513,7 @@ def start_server(host, port, open_browser=True):
         return 1
 
     _write_pid(os.getpid())
-    screensaver, url = _print_startup_info(host, port)
+    screensaver, url = _print_startup_info(host, port, show_dvd=show_dvd)
     try:
         # Lazy imports keep `fts stop`/`fts status` working
         # even if runtime dependencies are not installed.
@@ -494,6 +521,8 @@ def start_server(host, port, open_browser=True):
         from server import app
 
         _configure_waitress()
+        if not show_dvd:
+            _attach_access_log(app)
         if open_browser and os.getenv("INERT_TRANSFER_NO_BROWSER") != "1":
             _open_browser(url)
         serve(app, host=host, port=port, threads=8)
@@ -560,12 +589,20 @@ def status_server(port=8069):
     return 0
 
 
+def _normalize_start_argv(argv):
+    """Accept `inert no-dvd` and `inert 8080 no-dvd` without a subcommand."""
+    no_dvd_tokens = {"no-dvd", "--no-dvd"}
+    show_dvd = not any(token in no_dvd_tokens for token in argv)
+    argv = [token for token in argv if token not in no_dvd_tokens]
+    if argv and len(argv) == 1 and str(argv[0]).isdigit():
+        argv = ["start", "--port", str(argv[0])]
+    return argv, show_dvd
+
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
-    # Shortcut: `inert 9001` -> `inert start --port 9001`
-    if argv and len(argv) == 1 and str(argv[0]).isdigit():
-        argv = ["start", "--port", str(argv[0])]
+    argv, show_dvd = _normalize_start_argv(argv)
 
     update_message = check_for_update()
     if update_message:
@@ -582,6 +619,11 @@ def main(argv=None):
         action="store_true",
         help="Do not open Chrome/browser automatically",
     )
+    start_parser.add_argument(
+        "--no-dvd",
+        action="store_true",
+        help="Keep the status box still and print request logs (also: inert no-dvd, inert 8080 no-dvd)",
+    )
 
     stop_parser = sub.add_parser("stop", help="Stop the server started by fts")
     stop_parser.add_argument("--port", type=int, default=8069, help="Port to check/stop (default: 8069)")
@@ -596,7 +638,9 @@ def main(argv=None):
         host = getattr(args, "host", "0.0.0.0")
         port = getattr(args, "port", 8069)
         open_browser = not getattr(args, "no_browser", False)
-        return start_server(host, port, open_browser=open_browser)
+        if getattr(args, "no_dvd", False):
+            show_dvd = False
+        return start_server(host, port, open_browser=open_browser, show_dvd=show_dvd)
     if command == "stop":
         return stop_server(getattr(args, "port", 8069))
     if command == "status":

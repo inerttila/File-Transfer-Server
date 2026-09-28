@@ -16,10 +16,14 @@ inert      # starts the server on port 8069
 ```
 ```bash
 inert <port>     # starts the server on the specified port
+inert no-dvd     # starts without the bouncing status box and prints request logs
+inert <port> no-dvd     # same, on the specified port (example: inert 8080 no-dvd)
 inert status     # shows the status of the server
 inert stop     # stops the server
 inert -h     # shows the help menu
 ```
+
+`inert no-dvd` leaves the terminal still so you can read logs. Each request is printed as one line (`POST / -> 200`). A `500` or a traceback under that line is a failed upload. A normal `inert` start still shows the bouncing status box.
 
 ## Setup
 
