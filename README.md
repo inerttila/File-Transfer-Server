@@ -1,4 +1,4 @@
-# File Transfer Server
+# <img src="https://raw.githubusercontent.com/inerttila/Inerttila/refs/heads/main/logo/inert-mark.svg" alt="Inert" height="40" />  File Transfer Server
 
 Flask app for uploading and downloading files over the web. Optional **PIN protection**, **per-folder encryption**, and **one-time links (OTL)** help keep your files private or shared safely.
 
